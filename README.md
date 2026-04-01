@@ -85,7 +85,7 @@ Projenin genel akışı şu şekildedir:
 6. Kaynak ve güven skoru sunumu  
 7. Anomali tespiti ve raporlama  
 
-Bu yapı, hem doğru yanıt üretimini hem de sistem izlenebilirliğini sağlar. :contentReference[oaicite:0]{index=0}
+Bu yapı, hem doğru yanıt üretimini hem de sistem izlenebilirliğini sağlar. 
 
 ---
 
@@ -112,7 +112,7 @@ Proje kapsamında hedeflenen metrikler:
 - Ortalama yanıt süresi < 2 saniye  
 - Tekrarlayan kayıt oranında azalma  
 
-Bu metrikler sistemin hem teknik hem operasyonel başarısını ölçmek için kullanılacaktır. :contentReference[oaicite:1]{index=1}
+Bu metrikler sistemin hem teknik hem operasyonel başarısını ölçmek için kullanılacaktır. 
 
 ---
 
