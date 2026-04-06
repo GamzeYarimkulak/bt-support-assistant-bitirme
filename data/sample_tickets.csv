@@ -1,0 +1,212 @@
+Record ID,Date,Time,First Response Time (seconds),Call Handle Time (minutes),First Call Resolution (FCR) (Yes/No),Quality of Recent Support (Rating),Average Wait Time (seconds),Customer Satisfaction & Recommendations (Rating),Agent ID/Name,Customer Retention (Yes/No),Fully Burdened Cost per call,Revenue per Call ($),Customer ID,Customer Inquiry Topic,Product Discussed,Customer Revenue ($)
+1,10/30/2023,14:19:56,79,44.98,No,2,171,4,Agent 2,Yes,131.4,338.95,Cust6602,Return & Refund,Smartphone,8440.78
+2,11/3/2023,16:46:56,119,31.38,No,5,169,1,Agent 50,Yes,136.96,203.26,Cust2362,Product Feedback,Speaker,3239.86
+3,10/29/2023,22:27:56,87,24.61,No,3,166,2,Agent 48,No,82.38,244.08,Cust7801,Warranty Claim,Tablet,319.41
+4,11/13/2023,18:38:56,13,29.27,Yes,4,147,5,Agent 16,No,147.35,316.5,Cust2790,Data Security,Speaker,8677.27
+5,10/23/2023,16:21:56,111,48.49,No,2,212,3,Agent 19,No,86.62,289.17,Cust2433,Warranty Claim,Printer,1304
+6,10/30/2023,19:15:56,88,4.23,No,5,232,5,Agent 39,Yes,197.39,225.39,Cust7689,Warranty Claim,Speaker,9887.85
+7,11/2/2023,12:28:56,56,27.45,No,1,291,1,Agent 37,Yes,22.26,388.83,Cust3552,Data Security,Tablet,8316.47
+8,10/17/2023,13:07:56,41,9.1,Yes,2,16,2,Agent 6,No,199.66,46.1,Cust6843,Data Security,Printer,9129.79
+9,10/26/2023,4:15:56,118,4.36,No,5,97,3,Agent 42,No,157.46,383.34,Cust1118,Warranty Claim,Headphones,9458.31
+10,11/9/2023,3:24:56,51,53.11,Yes,1,214,4,Agent 43,No,177.79,330.69,Cust9264,Product Feedback,Charger,1778.38
+11,11/2/2023,6:28:56,93,18.59,Yes,3,222,1,Agent 2,No,110.4,69.22,Cust1374,Promotions & Offers,Speaker,6833.42
+12,10/17/2023,4:45:56,62,19.47,Yes,4,38,1,Agent 17,No,128.52,317.77,Cust8318,Shipping Status,Speaker,8817.41
+13,11/13/2023,9:47:56,49,2.79,Yes,4,47,4,Agent 20,Yes,35.6,417.29,Cust9741,Return & Refund,Smartwatch,6932.88
+14,11/8/2023,10:55:56,55,53.49,Yes,3,58,4,Agent 3,Yes,155.24,264.78,Cust5885,Account Management,Camera,185.92
+15,10/31/2023,12:28:56,89,41.43,No,2,120,1,Agent 35,No,181.2,329.32,Cust7864,Product Feedback,Speaker,9970.07
+16,10/27/2023,7:44:56,8,42.56,Yes,3,92,2,Agent 11,Yes,47.44,26.73,Cust5222,Product Feedback,Speaker,2902.61
+17,11/11/2023,2:58:56,73,49.73,No,2,168,3,Agent 6,No,53.37,72.91,Cust9662,Product Setup,Smartwatch,4921.66
+18,10/24/2023,7:59:56,58,10.53,No,4,246,5,Agent 27,No,45.77,454.21,Cust8495,Product Feedback,Laptop,2747.41
+19,11/15/2023,3:41:56,118,31.36,No,4,133,2,Agent 6,No,168.41,181.05,Cust4539,Return & Refund,Camera,8419.32
+20,11/5/2023,21:00:56,86,51.15,No,3,145,3,Agent 14,No,136.89,242.51,Cust2124,Data Security,Smartphone,2690.7
+21,11/13/2023,3:42:56,86,1.36,No,3,221,4,Agent 46,No,66.63,335.92,Cust7282,Billing Inquiry,Headphones,2167.97
+22,10/29/2023,16:38:56,94,25.97,No,1,184,5,Agent 38,No,187.34,289.15,Cust5040,Promotions & Offers,Printer,9109.88
+23,10/30/2023,23:55:56,29,7.26,No,3,187,3,Agent 43,No,169.73,271.25,Cust5637,Product Setup,Speaker,8011.32
+24,10/17/2023,4:11:56,33,37.8,Yes,1,119,3,Agent 14,Yes,104.31,379.78,Cust3326,Return & Refund,Laptop,7658.76
+25,11/4/2023,15:56:56,9,2.13,No,5,222,3,Agent 34,Yes,10.33,320.44,Cust6465,Product Setup,Charger,2455.03
+26,10/22/2023,3:51:56,14,13.1,No,2,71,4,Agent 17,No,167.96,334.74,Cust7272,Technical Support,Smartphone,5565.3
+27,10/21/2023,8:34:56,103,16.49,Yes,4,273,2,Agent 30,Yes,192.41,114.11,Cust2753,Shipping Status,Smartphone,1616.74
+28,11/9/2023,21:05:56,59,10.09,No,4,158,4,Agent 19,No,98.94,361.2,Cust4427,Technical Support,Tablet,8362.03
+29,11/6/2023,6:50:56,88,39.74,Yes,1,237,1,Agent 41,No,99.39,324.48,Cust4577,Technical Support,Smartphone,4400.24
+30,11/12/2023,7:12:56,46,52.48,No,4,17,1,Agent 15,No,139.46,260.24,Cust1113,Promotions & Offers,Tablet,6155.76
+31,11/12/2023,17:57:56,20,30.82,No,5,144,4,Agent 38,Yes,164.62,352.12,Cust1665,Account Management,Smartphone,7954.15
+32,10/18/2023,10:43:56,34,56.49,No,2,19,3,Agent 34,Yes,122.25,479.1,Cust8035,Promotions & Offers,Charger,112.07
+33,11/11/2023,0:31:56,80,11.5,No,3,62,3,Agent 20,Yes,155.65,170.14,Cust6203,Product Feedback,Charger,5507.69
+34,10/16/2023,17:04:56,28,20.9,No,3,113,3,Agent 20,Yes,115.77,428.09,Cust5452,Shipping Status,Smartphone,9591.37
+35,11/2/2023,22:28:56,114,44.22,No,1,169,2,Agent 30,No,113.07,142.67,Cust1381,Billing Inquiry,Laptop,1689.43
+36,11/1/2023,10:09:56,35,34.23,No,1,169,4,Agent 1,Yes,83.55,493.2,Cust7937,Data Security,Smartphone,6212.04
+37,10/28/2023,13:46:56,60,4.96,Yes,5,164,4,Agent 17,No,57.11,375.12,Cust8409,Product Feedback,Printer,597.39
+38,10/22/2023,5:56:56,67,44.15,No,4,123,5,Agent 47,No,21.81,306.76,Cust2016,Account Management,Tablet,4182.81
+39,10/20/2023,6:22:56,70,6.38,Yes,4,273,4,Agent 32,Yes,99.39,261.9,Cust7176,Product Setup,Camera,9075.96
+40,11/14/2023,14:45:56,69,7.95,No,1,239,2,Agent 47,Yes,51.92,239.86,Cust4443,Account Management,Speaker,5367.45
+41,10/20/2023,19:50:56,15,17.17,No,1,26,4,Agent 47,Yes,119.05,319.67,Cust1774,Warranty Claim,Printer,3889.3
+42,10/27/2023,10:42:56,107,20.72,Yes,3,70,2,Agent 1,No,77.89,365.5,Cust2202,Product Feedback,Smartwatch,3406.67
+43,11/8/2023,21:38:56,99,5.56,No,2,117,4,Agent 31,No,105.1,362.36,Cust8027,Promotions & Offers,Tablet,8676.77
+44,11/11/2023,16:28:56,114,3.18,No,4,271,1,Agent 39,Yes,12.82,41.13,Cust2365,Technical Support,Headphones,2815.43
+45,11/2/2023,20:35:56,41,15.12,Yes,4,159,1,Agent 18,Yes,129.24,162.23,Cust4575,Product Setup,Smartphone,8424.67
+46,10/31/2023,14:29:56,50,7.66,Yes,2,259,4,Agent 10,Yes,117.9,75.04,Cust5593,Return & Refund,Camera,5957.81
+47,11/3/2023,5:50:56,42,59.12,No,5,272,3,Agent 46,Yes,77.58,11.66,Cust7878,Product Setup,Speaker,2971.52
+48,11/1/2023,6:31:56,100,56.63,Yes,3,96,5,Agent 37,No,17.42,367.96,Cust1425,Promotions & Offers,Camera,7421.72
+49,11/14/2023,23:20:56,21,16.79,Yes,2,281,2,Agent 17,Yes,61.65,296.46,Cust3819,Shipping Status,Camera,5658.34
+50,11/15/2023,23:44:56,21,37.75,No,4,233,1,Agent 14,Yes,184.35,32.73,Cust6493,Product Setup,Printer,9329.86
+51,11/3/2023,16:21:56,88,26.32,Yes,2,93,3,Agent 48,Yes,89.86,357.98,Cust3876,Return & Refund,Smartphone,6314.76
+52,10/31/2023,11:41:56,64,55.33,Yes,1,206,4,Agent 12,Yes,82.48,389.86,Cust2559,Data Security,Headphones,9804.4
+53,11/8/2023,1:51:56,32,46.51,Yes,5,130,3,Agent 18,Yes,199.78,461.75,Cust3086,Product Setup,Router,367.58
+54,10/30/2023,8:19:56,10,20.41,No,4,75,4,Agent 23,No,22.66,31.91,Cust5285,Data Security,Speaker,9310.58
+55,11/9/2023,7:10:56,15,43.14,No,1,153,4,Agent 24,No,40.77,335.27,Cust8376,Warranty Claim,Charger,3835.39
+56,10/31/2023,2:34:56,83,56.97,No,2,16,1,Agent 36,No,76.95,359.02,Cust4056,Data Security,Headphones,8553.62
+57,11/5/2023,22:53:56,5,59.77,No,4,278,1,Agent 11,Yes,69.72,85.56,Cust9302,Data Security,Camera,7083.37
+58,11/13/2023,23:35:56,12,37.67,Yes,2,37,4,Agent 18,Yes,91.38,223.17,Cust8598,Promotions & Offers,Router,744.09
+59,11/4/2023,23:15:56,27,28.91,No,2,278,2,Agent 40,Yes,179.98,451.28,Cust8324,Shipping Status,Charger,2114.36
+60,11/3/2023,21:45:56,85,40.19,No,3,184,2,Agent 48,Yes,13.26,225.85,Cust9801,Product Setup,Speaker,7910.77
+61,11/13/2023,14:19:56,83,42.75,Yes,5,287,2,Agent 43,Yes,148.98,348.64,Cust4078,Product Feedback,Speaker,7300.25
+62,10/24/2023,13:03:56,29,32.52,Yes,5,120,3,Agent 3,No,182.39,231.06,Cust8364,Account Management,Charger,4011.02
+63,11/9/2023,19:51:56,26,4.63,Yes,3,206,2,Agent 17,Yes,94.03,138.71,Cust5806,Product Setup,Speaker,1373.73
+64,11/15/2023,10:34:56,25,24.42,Yes,1,243,2,Agent 3,No,183.3,91.92,Cust4460,Technical Support,Smartphone,3511.49
+65,11/10/2023,22:05:56,70,1.94,No,3,21,4,Agent 49,No,186.26,107.38,Cust7025,Promotions & Offers,Headphones,2920.41
+66,11/3/2023,23:47:56,115,24.55,No,4,192,5,Agent 49,No,56.85,11.2,Cust8251,Product Feedback,Headphones,521.96
+67,10/19/2023,5:03:56,23,1.35,Yes,5,217,3,Agent 6,No,131.73,146.45,Cust1330,Data Security,Charger,6379.53
+68,10/18/2023,13:02:56,113,11.17,Yes,2,125,2,Agent 29,No,178.52,298.27,Cust4304,Return & Refund,Laptop,4114.35
+69,10/25/2023,12:45:56,93,42.79,No,3,286,1,Agent 9,Yes,169.87,179.14,Cust4718,Product Feedback,Speaker,9361.69
+70,11/4/2023,20:02:56,87,39.61,No,1,201,3,Agent 25,No,134.85,382.12,Cust7145,Data Security,Laptop,8901.93
+71,11/12/2023,1:02:56,81,57.8,Yes,1,235,3,Agent 44,No,197.17,99.52,Cust2050,Account Management,Smartphone,5962.58
+72,11/11/2023,13:55:56,18,24.98,Yes,5,185,4,Agent 18,No,18.94,239.06,Cust3709,Product Feedback,Laptop,6377.35
+73,10/20/2023,18:15:56,87,29.12,Yes,4,229,1,Agent 22,Yes,122.06,39.03,Cust8957,Return & Refund,Smartwatch,2582.01
+74,11/13/2023,21:16:56,96,19.17,Yes,2,260,2,Agent 16,No,149.59,93.26,Cust7405,Product Feedback,Headphones,6422.13
+75,10/26/2023,20:29:56,75,52.18,No,4,249,5,Agent 43,Yes,68.27,321.44,Cust1957,Warranty Claim,Smartwatch,9664.57
+76,10/29/2023,5:23:56,20,23.74,No,3,87,1,Agent 35,Yes,142.78,114.37,Cust8969,Product Setup,Printer,2109.44
+77,11/10/2023,20:42:56,52,12.94,Yes,5,130,2,Agent 37,No,198.54,495.96,Cust1538,Account Management,Headphones,9972.6
+78,11/14/2023,4:48:56,20,37.08,No,3,223,3,Agent 3,No,91.06,122.72,Cust4606,Shipping Status,Laptop,8276.75
+79,10/23/2023,22:09:56,73,53.95,Yes,1,144,1,Agent 12,Yes,23.28,163.32,Cust2259,Billing Inquiry,Camera,425.62
+80,11/3/2023,3:14:56,71,53.96,Yes,2,17,4,Agent 42,Yes,63.74,249.57,Cust8656,Return & Refund,Router,5325.55
+81,10/17/2023,4:37:56,90,57.02,No,1,120,5,Agent 14,No,123.11,471.07,Cust3001,Data Security,Charger,2423.07
+82,10/27/2023,5:05:56,22,58.9,Yes,4,139,1,Agent 13,No,39.81,98.04,Cust6598,Billing Inquiry,Tablet,6286.15
+83,11/8/2023,14:16:56,45,37.34,No,4,178,2,Agent 10,Yes,18.22,384.54,Cust3485,Promotions & Offers,Laptop,6132.04
+84,11/3/2023,12:58:56,33,51.97,Yes,3,128,5,Agent 46,No,163.22,63.58,Cust2840,Warranty Claim,Camera,4181.74
+85,11/3/2023,6:54:56,25,54.47,No,4,279,5,Agent 27,No,130.99,61.41,Cust9574,Return & Refund,Tablet,1631.71
+86,11/14/2023,18:16:56,38,16.86,No,4,233,2,Agent 30,Yes,23.22,123.96,Cust2793,Promotions & Offers,Smartphone,1455.5
+87,11/6/2023,15:00:56,29,16.26,No,1,31,5,Agent 42,Yes,115.22,336.17,Cust7280,Product Feedback,Printer,9960.9
+88,11/14/2023,0:51:56,27,13.25,Yes,2,130,5,Agent 3,No,47.59,421.62,Cust3867,Promotions & Offers,Smartwatch,709.83
+89,11/14/2023,14:47:56,87,21.83,No,2,92,1,Agent 48,Yes,194.88,382.1,Cust3035,Billing Inquiry,Speaker,3798.79
+90,10/25/2023,10:40:56,38,27.3,No,3,285,2,Agent 30,No,174.67,250.27,Cust8392,Return & Refund,Tablet,838.4
+91,10/30/2023,9:15:56,100,14.62,Yes,1,276,2,Agent 34,Yes,39.06,11.75,Cust7456,Technical Support,Headphones,8137.77
+92,10/23/2023,6:35:56,35,14.16,No,3,12,2,Agent 43,No,127.66,67.98,Cust2619,Data Security,Charger,6008.38
+93,11/3/2023,12:55:56,100,36.44,No,2,185,1,Agent 45,Yes,27.32,336.5,Cust7779,Product Feedback,Charger,8584.07
+94,11/6/2023,6:59:56,83,20.36,Yes,3,213,4,Agent 27,No,87.25,391.86,Cust9073,Product Feedback,Smartwatch,2728.73
+95,10/30/2023,18:46:56,61,17.71,No,5,219,1,Agent 45,No,73.26,229.34,Cust5792,Account Management,Charger,5227.42
+96,11/8/2023,10:53:56,65,55.82,No,3,238,1,Agent 2,Yes,106.15,176.45,Cust1662,Return & Refund,Smartphone,2949.89
+97,11/9/2023,8:02:56,36,3.25,Yes,5,222,3,Agent 16,Yes,91.95,99.49,Cust6931,Billing Inquiry,Speaker,1262.09
+98,10/16/2023,19:59:56,120,19.64,Yes,1,69,5,Agent 48,Yes,137.45,24.28,Cust8441,Product Feedback,Speaker,7572.83
+99,11/5/2023,15:28:56,26,55.08,Yes,2,132,2,Agent 5,No,45.53,235.8,Cust2944,Technical Support,Router,4420.09
+100,10/21/2023,21:21:56,88,31.43,Yes,5,73,2,Agent 44,Yes,157.04,424.81,Cust8691,Shipping Status,Speaker,6432.43
+101,11/1/2023,7:19:56,93,1.2,No,3,299,1,Agent 11,No,77.74,234.12,Cust3706,Account Management,Router,8645.87
+102,10/23/2023,17:43:56,84,7.19,No,5,145,2,Agent 22,No,47.3,373.69,Cust1602,Account Management,Headphones,6202.11
+103,10/23/2023,22:05:56,99,9.67,Yes,2,117,5,Agent 4,No,89.24,212.81,Cust6748,Shipping Status,Router,6914.56
+104,11/2/2023,23:30:56,30,40.56,Yes,1,290,1,Agent 36,No,89.7,415.34,Cust6226,Return & Refund,Smartphone,3088.26
+105,10/25/2023,23:44:56,100,37.13,No,3,212,3,Agent 27,Yes,11.93,343.37,Cust3609,Warranty Claim,Headphones,7622.31
+106,10/25/2023,17:29:56,47,31.59,Yes,4,277,4,Agent 32,Yes,105.79,242.5,Cust2424,Return & Refund,Camera,551.09
+107,10/27/2023,9:13:56,118,41.22,No,3,187,2,Agent 23,Yes,127.15,266.82,Cust2394,Product Feedback,Smartphone,9269.16
+108,11/4/2023,8:46:56,118,8.07,No,3,226,1,Agent 13,No,137.34,342.11,Cust5464,Billing Inquiry,Smartwatch,349.79
+109,10/27/2023,17:51:56,36,44.68,Yes,1,89,1,Agent 7,Yes,73.28,420.47,Cust3433,Promotions & Offers,Tablet,1461.82
+110,10/20/2023,11:34:56,20,10.54,No,4,291,3,Agent 34,No,102.71,358.57,Cust2468,Shipping Status,Camera,6892.55
+111,10/22/2023,5:56:56,99,43.06,Yes,2,103,2,Agent 36,Yes,31.15,187.38,Cust9726,Warranty Claim,Router,4094.97
+112,11/3/2023,16:47:56,57,34.53,Yes,3,22,4,Agent 3,No,66.47,173.25,Cust6253,Shipping Status,Router,4811.63
+113,11/6/2023,13:04:56,40,47.8,No,1,206,1,Agent 36,Yes,164.71,38.71,Cust6236,Product Feedback,Printer,6969.9
+114,11/3/2023,18:03:56,75,38.57,Yes,5,98,2,Agent 39,No,105.02,348.53,Cust6927,Technical Support,Smartphone,6901.51
+115,10/19/2023,23:49:56,18,40.18,Yes,3,64,3,Agent 22,No,58.09,81.68,Cust4248,Promotions & Offers,Tablet,3217.87
+116,11/9/2023,13:59:56,48,17.97,Yes,2,77,3,Agent 47,No,32.97,110.3,Cust9545,Shipping Status,Headphones,3709.19
+117,10/18/2023,21:01:56,59,3.13,Yes,4,251,1,Agent 40,Yes,180.26,10.98,Cust1001,Technical Support,Smartwatch,7799.08
+118,10/25/2023,13:04:56,17,52.78,Yes,2,98,2,Agent 48,Yes,72.89,237.29,Cust2759,Account Management,Speaker,2371.83
+119,11/6/2023,8:28:56,80,22.19,Yes,2,148,5,Agent 7,No,34.88,132.28,Cust8991,Product Setup,Printer,4147.19
+120,10/18/2023,9:20:56,34,38.67,Yes,3,58,1,Agent 38,No,98.23,190.4,Cust7628,Product Feedback,Speaker,7789.62
+121,10/29/2023,11:09:56,108,45.95,Yes,2,174,3,Agent 21,No,66.9,319.19,Cust5849,Data Security,Charger,6613.85
+122,11/1/2023,8:29:56,51,20.43,No,5,242,2,Agent 27,No,186.88,120.63,Cust8599,Data Security,Camera,8069.65
+123,10/26/2023,8:39:56,109,42.16,Yes,4,277,1,Agent 9,No,191.25,435.25,Cust7478,Return & Refund,Smartphone,3684.03
+124,10/24/2023,9:41:56,21,16.43,No,4,197,3,Agent 39,No,40.54,233.37,Cust7748,Product Setup,Charger,4453.08
+125,11/16/2023,7:02:56,36,31.19,Yes,4,112,1,Agent 28,Yes,169.89,54.08,Cust9828,Billing Inquiry,Laptop,3881.71
+126,10/18/2023,14:11:56,57,51.28,No,5,50,5,Agent 16,Yes,125.41,20.22,Cust6946,Technical Support,Laptop,9324.62
+127,10/19/2023,15:18:56,72,25.62,Yes,3,156,4,Agent 46,No,67.68,304.89,Cust5897,Billing Inquiry,Printer,5388.37
+128,11/5/2023,0:43:56,17,21.63,Yes,1,78,5,Agent 31,No,81.91,301.41,Cust8022,Shipping Status,Charger,1661.63
+129,10/21/2023,6:35:56,90,41.73,No,1,291,2,Agent 39,Yes,125.99,103.74,Cust6850,Promotions & Offers,Camera,7610.34
+130,11/7/2023,18:01:56,104,32.71,No,3,117,2,Agent 32,No,155.88,105.57,Cust1182,Billing Inquiry,Camera,5205.35
+131,11/10/2023,5:31:56,93,56.62,Yes,1,167,2,Agent 37,Yes,186.06,475.62,Cust7949,Data Security,Router,3282.97
+132,11/4/2023,22:35:56,53,45.92,No,3,196,3,Agent 13,Yes,164.66,60.35,Cust7931,Return & Refund,Camera,1087.76
+133,10/29/2023,13:53:56,6,56.95,No,2,244,4,Agent 17,No,138.28,33.46,Cust6180,Shipping Status,Laptop,2690.07
+134,11/10/2023,12:58:56,102,53.89,Yes,4,103,5,Agent 31,Yes,79.26,247.8,Cust6607,Billing Inquiry,Camera,9880.94
+135,10/25/2023,19:11:56,25,40.57,No,4,32,4,Agent 6,No,18.49,358.79,Cust5459,Warranty Claim,Camera,2303.1
+136,11/13/2023,1:18:56,80,12.94,Yes,1,125,1,Agent 46,No,160.32,310.09,Cust1330,Product Setup,Router,7337.7
+137,10/26/2023,9:48:56,23,15.05,No,1,249,4,Agent 16,No,119.18,169.51,Cust2991,Promotions & Offers,Tablet,8558.93
+138,11/10/2023,21:15:56,45,7.06,Yes,3,129,5,Agent 13,No,34.54,472.68,Cust4556,Product Setup,Speaker,7517.75
+139,10/24/2023,19:39:56,59,24.51,Yes,2,191,1,Agent 5,No,124.05,361.44,Cust1389,Shipping Status,Tablet,2193.31
+140,11/1/2023,9:41:56,47,15.7,Yes,3,37,1,Agent 36,No,15.39,313.82,Cust3647,Billing Inquiry,Speaker,9272.29
+141,10/25/2023,6:27:56,114,44.75,No,2,229,1,Agent 45,Yes,91.69,62.32,Cust5115,Product Feedback,Speaker,1825.08
+142,10/19/2023,18:20:56,11,3.76,No,4,124,4,Agent 49,No,151.04,432.02,Cust3800,Promotions & Offers,Charger,7932.24
+143,10/17/2023,10:33:56,38,18.07,No,1,282,4,Agent 43,No,182.02,451.22,Cust3321,Data Security,Laptop,4893.11
+144,10/29/2023,0:01:56,25,49.08,Yes,2,67,1,Agent 33,No,124.24,52.48,Cust3182,Product Setup,Speaker,5322.11
+145,10/22/2023,0:51:56,113,34.51,Yes,4,175,4,Agent 39,No,66.92,24.63,Cust8798,Promotions & Offers,Charger,6996.77
+146,11/15/2023,6:25:56,53,33.95,Yes,4,20,1,Agent 4,No,99.81,81.59,Cust1851,Account Management,Smartwatch,9817.44
+147,11/8/2023,12:29:56,91,47.38,Yes,5,87,2,Agent 31,Yes,48.38,76.14,Cust8699,Billing Inquiry,Headphones,5152.76
+148,10/20/2023,20:08:56,90,32.57,No,5,71,1,Agent 25,No,190.3,110.81,Cust2461,Account Management,Tablet,859.15
+149,11/4/2023,8:35:56,82,41.75,No,3,259,3,Agent 14,Yes,166.16,150.49,Cust7271,Product Setup,Speaker,3410.6
+150,11/8/2023,18:52:56,20,32.79,Yes,5,252,1,Agent 17,No,53.69,360.21,Cust3522,Billing Inquiry,Smartphone,8708.77
+151,10/25/2023,1:53:56,105,27.22,Yes,3,42,1,Agent 45,No,172.44,265.36,Cust6796,Product Feedback,Camera,4693.98
+152,10/18/2023,2:19:56,6,31.73,Yes,2,289,1,Agent 19,No,115.54,24.9,Cust6464,Technical Support,Router,5984.68
+153,11/4/2023,16:23:56,87,9.35,No,1,78,2,Agent 38,No,88.19,118.56,Cust1174,Promotions & Offers,Tablet,1470.3
+154,10/17/2023,15:06:56,60,41.82,No,2,84,3,Agent 2,Yes,138.06,475.62,Cust8452,Shipping Status,Camera,5655.77
+155,10/17/2023,9:03:56,113,38.89,No,2,233,4,Agent 47,Yes,163.65,292.3,Cust3316,Shipping Status,Tablet,1097.27
+156,10/31/2023,7:40:56,94,45.78,Yes,2,101,5,Agent 2,No,117.91,238.58,Cust3847,Warranty Claim,Tablet,2437.95
+157,11/3/2023,22:58:56,114,37.34,No,2,168,1,Agent 4,Yes,58.76,348.03,Cust2733,Account Management,Printer,2410.84
+158,10/23/2023,10:12:56,62,58.68,Yes,5,176,4,Agent 25,Yes,50.1,442.55,Cust9519,Data Security,Smartwatch,5061.24
+159,11/4/2023,14:00:56,72,6.12,Yes,4,108,2,Agent 44,Yes,64.57,39.3,Cust6386,Warranty Claim,Camera,7904.77
+160,10/29/2023,4:23:56,73,53.77,No,1,162,3,Agent 36,Yes,189.31,78.61,Cust9837,Promotions & Offers,Headphones,5016.81
+161,11/14/2023,5:02:56,30,27.41,Yes,5,132,1,Agent 42,No,182.65,381.99,Cust8985,Product Setup,Smartwatch,3515.07
+162,11/5/2023,6:12:56,114,20.61,No,1,237,4,Agent 49,No,164.07,117.42,Cust6387,Product Setup,Router,2096.82
+163,10/25/2023,14:31:56,70,24.27,No,2,183,1,Agent 8,No,45.73,102.9,Cust3582,Billing Inquiry,Smartwatch,8452.76
+164,10/23/2023,5:04:56,51,55.33,Yes,1,150,5,Agent 30,No,17.47,111.53,Cust5056,Data Security,Router,8091.78
+165,11/1/2023,11:21:56,8,51.57,Yes,1,287,1,Agent 10,Yes,198.5,412.34,Cust8461,Promotions & Offers,Smartphone,4871.39
+166,11/9/2023,8:38:56,22,1.96,Yes,3,238,3,Agent 39,No,173.91,52.14,Cust1446,Product Setup,Camera,4913.26
+167,10/24/2023,8:17:56,61,18.3,No,4,12,5,Agent 34,No,59.49,484.79,Cust4685,Account Management,Smartphone,684.7
+168,10/19/2023,6:23:56,96,47.68,Yes,2,285,1,Agent 50,Yes,41.49,61.71,Cust6504,Product Setup,Smartphone,5670.6
+169,11/14/2023,9:29:56,106,8.34,Yes,5,67,4,Agent 47,No,55.39,395.67,Cust7969,Account Management,Smartphone,2608.93
+170,10/22/2023,6:39:56,26,48.9,No,1,41,5,Agent 24,Yes,157.21,497.98,Cust9321,Technical Support,Printer,4235.84
+171,11/11/2023,20:08:56,42,52.2,No,1,169,4,Agent 42,No,159.05,114.3,Cust6934,Warranty Claim,Smartphone,8415.74
+172,10/17/2023,19:32:56,68,48.37,No,1,225,5,Agent 2,No,160.4,139.88,Cust8087,Shipping Status,Headphones,5586.43
+173,10/22/2023,15:08:56,95,37.11,Yes,5,28,5,Agent 4,Yes,10.24,438.09,Cust3502,Billing Inquiry,Smartphone,5267.35
+174,10/30/2023,21:58:56,120,56.23,Yes,3,190,3,Agent 44,Yes,49.52,123.54,Cust1463,Data Security,Smartphone,6747.75
+175,11/6/2023,5:38:56,14,28.11,Yes,4,84,5,Agent 24,No,113.18,250.83,Cust5269,Product Feedback,Tablet,1138.41
+176,10/31/2023,1:57:56,41,21.28,No,5,30,2,Agent 25,Yes,33.04,212.27,Cust3061,Warranty Claim,Router,5553.88
+177,11/13/2023,22:41:56,78,41.56,Yes,1,71,3,Agent 31,Yes,106.93,157.27,Cust8420,Promotions & Offers,Router,9516.93
+178,10/29/2023,13:06:56,89,14.18,No,1,174,2,Agent 12,Yes,90.56,217.86,Cust3775,Technical Support,Headphones,8544.49
+179,11/12/2023,13:10:56,18,30.72,Yes,5,245,4,Agent 26,Yes,12.07,370.73,Cust1154,Promotions & Offers,Camera,9781.85
+180,10/21/2023,15:45:56,108,18.65,Yes,3,11,1,Agent 6,Yes,134.71,495.47,Cust9795,Technical Support,Tablet,352.27
+181,10/31/2023,15:24:56,7,7.63,Yes,3,180,4,Agent 16,No,136.26,192.61,Cust1320,Data Security,Laptop,8188.34
+182,10/18/2023,3:29:56,43,32.78,Yes,2,204,2,Agent 32,Yes,115.01,125.72,Cust6554,Promotions & Offers,Tablet,6647.53
+183,11/8/2023,6:06:56,71,51.59,No,5,183,3,Agent 37,No,124.83,396.04,Cust8957,Shipping Status,Smartwatch,284.41
+184,10/20/2023,12:24:56,9,3.69,No,2,180,5,Agent 25,Yes,172.84,441.83,Cust8879,Technical Support,Smartphone,4904.3
+185,11/7/2023,21:49:56,42,27.46,Yes,4,260,2,Agent 39,No,102.73,163.85,Cust2783,Product Setup,Headphones,7100.49
+186,10/20/2023,16:05:56,25,34.05,No,3,142,5,Agent 21,No,23.31,255.36,Cust9753,Product Setup,Camera,4948.47
+187,10/21/2023,16:00:56,73,57.48,No,1,196,3,Agent 15,No,55.36,84.64,Cust4857,Product Feedback,Laptop,1461.65
+188,11/15/2023,23:58:56,97,34.36,Yes,3,166,3,Agent 35,Yes,44.84,20.53,Cust6947,Account Management,Router,2940.32
+189,11/8/2023,0:28:56,44,31.23,No,1,20,1,Agent 26,Yes,159.32,51.03,Cust7776,Product Feedback,Smartphone,4030.28
+190,11/4/2023,5:59:56,52,59.16,Yes,5,81,1,Agent 49,Yes,109.15,360.14,Cust1890,Billing Inquiry,Speaker,3700.18
+191,11/12/2023,23:37:56,24,34.37,No,3,108,3,Agent 21,No,183.76,123.83,Cust6537,Data Security,Laptop,4840.86
+192,10/23/2023,9:37:56,62,51.1,No,2,36,5,Agent 40,Yes,104.2,480.12,Cust9587,Product Setup,Smartwatch,3823.68
+193,10/19/2023,20:56:57,59,10.53,Yes,5,235,4,Agent 50,Yes,54.38,86.18,Cust7254,Product Setup,Charger,9011.43
+194,10/20/2023,20:44:57,83,54.26,Yes,1,31,4,Agent 21,Yes,107.01,433.78,Cust8486,Promotions & Offers,Smartphone,6578.29
+195,10/25/2023,17:56:57,86,51.26,Yes,3,169,5,Agent 20,No,177.17,18.67,Cust4599,Product Setup,Headphones,7558.83
+196,11/14/2023,13:10:57,51,3.1,Yes,3,102,2,Agent 36,No,30.7,424.66,Cust9702,Warranty Claim,Camera,9406.05
+197,10/17/2023,8:00:57,114,50.76,No,2,283,5,Agent 10,Yes,111.91,397.44,Cust6680,Product Feedback,Printer,6029.45
+198,10/19/2023,11:05:57,119,52.52,No,2,158,3,Agent 6,No,25.49,56.45,Cust7425,Warranty Claim,Router,5774.21
+199,10/26/2023,14:45:57,71,45.91,Yes,1,293,2,Agent 30,No,44.11,465.85,Cust3997,Shipping Status,Camera,6718.7
+200,11/15/2023,15:09:57,114,51.53,Yes,2,62,5,Agent 4,No,150.53,345.73,Cust3765,Product Setup,Charger,9896.79
+201,11/15/2023,5:59:56,52,59.16,Yes,5,81,1,Agent 49,Yes,109.15,360.14,Cust1890,Billing Inquiry,Speaker,3700.18
+202,11/16/2023,23:37:56,24,34.37,No,3,108,3,Agent 21,No,183.76,123.83,Cust6537,Data Security,Laptop,4840.86
+203,11/17/2023,9:37:56,62,51.1,No,2,36,5,Agent 40,Yes,104.2,480.12,Cust9587,Product Setup,Smartwatch,3823.68
+204,11/18/2023,20:56:57,59,10.53,Yes,5,235,4,Agent 50,Yes,54.38,86.18,Cust7254,Product Setup,Charger,9011.43
+205,11/19/2023,20:44:57,83,54.26,Yes,1,31,4,Agent 21,Yes,107.01,433.78,Cust8486,Promotions & Offers,Smartphone,6578.29
+206,11/20/2023,17:56:57,86,51.26,Yes,3,169,5,Agent 20,No,177.17,18.67,Cust4599,Product Setup,Headphones,7558.83
+207,11/21/2023,13:10:57,51,3.1,Yes,3,102,2,Agent 36,No,30.7,424.66,Cust9702,Warranty Claim,Camera,9406.05
+208,11/22/2023,8:00:57,114,50.76,No,2,283,5,Agent 10,Yes,111.91,397.44,Cust6680,Product Feedback,Printer,6029.45
+209,11/23/2023,11:05:57,119,52.52,No,2,158,3,Agent 6,No,25.49,56.45,Cust7425,Warranty Claim,Router,5774.21
+210,11/24/2023,14:45:57,71,45.91,Yes,1,293,2,Agent 30,No,44.11,465.85,Cust3997,Shipping Status,Camera,6718.7
+211,11/25/2023,15:09:57,114,51.53,Yes,2,62,5,Agent 4,No,150.53,345.73,Cust3765,Product Setup,Charger,9896.79
