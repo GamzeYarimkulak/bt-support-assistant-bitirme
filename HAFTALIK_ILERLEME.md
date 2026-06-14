@@ -25,7 +25,7 @@
 | 6 | 11.05 - 17.05 | RAG/chat pipeline’ının geliştirilmesi, kaynaklı yanıt üretimi ve “kaynak yoksa cevap yok” mantığının eklenmesi | %65 | ✅ Tamamlandı |
 | 7 | 18.05 - 24.05 | Anomali tespiti modülünün geliştirilmesi, semantik drift ve örnek anomali senaryolarının test edilmesi | %75 | ✅ Tamamlandı |
 | 8 | 01.06 - 07.06 | API ve frontend entegrasyonunun yapılması, sohbet ekranı ve anomali panelinin birlikte çalışacak şekilde düzenlenmesi | %85 | ✅ Tamamlandı |
-| 9 | 08.06 - 14.06 | Testlerin genişletilmesi, hata senaryolarının kontrol edilmesi, sistem performansının ve yanıt kalitesinin değerlendirilmesi | %93 | ⬜ Başlamadı |
+| 9 | 08.06 - 14.06 | Testlerin genişletilmesi, hata senaryolarının kontrol edilmesi, sistem performansının ve yanıt kalitesinin değerlendirilmesi | %93 | ✅ Tamamlandı |
 | 10 | 15.06 - 21.06 | Dokümantasyonun tamamlanması, son hata düzeltmeleri, demo/sunum hazırlığı ve final teslim öncesi genel kontrol | %100 | ⬜ Başlamadı |
 
 **Durum simgeleri:** ⬜ Başlamadı | 🔄 Devam Ediyor | ✅ Tamamlandı | ⚠️ Gecikti
@@ -34,6 +34,57 @@
 
 ## Haftalık İlerleme Kayıtları
 
+### Hafta 9 *(Tarih: 08.06.2026 - 14.06.2026)*
+
+**Plandaki hedef:**
+
+- Testlerin genişletilmesi
+- Hata senaryolarının kontrol edilmesi
+- Sistem performansının değerlendirilmesi
+- Yanıt kalitesinin ve retrieval başarımının analiz edilmesi
+
+**Bu hafta yaptıklarım:**
+
+- Veri hazırlama hattını düzenleyerek ham ticket ve bilgi bankası verilerinden `data/processed` çıktılarının üretilebilmesini sağladım
+- Ticket ve KB dokümanlarının birlikte indekslenebilmesi için BM25 ve FAISS tabanlı index hattını güncelledim
+- Büyük veri setiyle çalışmayı kolaylaştırmak için indexleme sürecine opsiyonel `--limit` parametresi ekledim
+- Retrieval değerlendirme scriptini geliştirerek Recall@5, Recall@10, Precision@5 ve nDCG@10 metriklerini hesapladım
+- Genel kullanıcı sorguları ile ticket-spesifik sorguların farklı değerlendirilmesi gerektiğini belirleyerek kategori ve alt kategori bazlı ek metrikler ekledim
+- Retrieval değerlendirme veri setindeki tekrar eden ve genel ifadeli sorguların exact ID skorlarını düşürdüğünü analiz ettim
+- Anomali tespit modülü için bağımsız validation veri seti oluşturdum
+- Volume spike, category shift, semantic drift ve combined anomaly senaryolarını içeren anomali ground-truth yapısını genişlettim
+- Anomali değerlendirme scriptini geliştirerek precision, recall, F1, specificity, false positive adayları ve severity uyumu gibi metrikleri hesapladım
+- Anomali motorunda review candidate, warning ve critical alert ayrımını daha anlaşılır hale getirdim
+- Frontend anomaly ekranına model quality paneli ekleyerek validation metriklerinin arayüzde gösterilmesini sağladım
+- Frontend tasarımını daha sade, modern ve operasyon paneli görünümüne uygun olacak şekilde düzenledim
+- Chat arayüzünde kaynak gösterimi, bağlam yeterlilik skoru ve Türkçe yanıt akışını kontrol ettim
+- Test ortamındaki eksik bağımlılıkları kontrol ederek `pyarrow` ve `pypdf` gibi gerekli paketleri requirements dosyasına ekledim
+- `python -m pytest` komutu ile testleri çalıştırarak mevcut testlerin geçtiğini doğruladım
+- Bitirme raporunda kullanılmak üzere retrieval ve anomaly performans grafikleri hazırladım
+
+**Plana göre durumum:**
+
+- Hafta 9 hedefleri büyük ölçüde tamamlandı
+- Retrieval, RAG ve anomaly modülleri için değerlendirme metrikleri üretildi
+- Sistem performansı hem metrik dosyaları hem de frontend paneli üzerinden izlenebilir hale getirildi
+- Testler çalıştırılarak sistemin temel bileşenlerinin beklendiği gibi davrandığı doğrulandı
+
+**Karşılaştığım sorunlar / zorluklar:**
+
+- Retrieval değerlendirmesinde genel sorgular için tek bir ticket ID beklemenin gerçekçi olmadığı görüldü
+- Exact ID metrikleri ile kategori/alt kategori bazlı metriklerin ayrı yorumlanması gerektiği belirlendi
+- Anomali değerlendirmesinde yalnızca pozitif eventler üzerinden ölçüm yapmanın yanıltıcı olabileceği fark edildi
+- Bu nedenle negatif günleri de içeren bağımsız validation seti oluşturularak daha dengeli bir değerlendirme yapıldı
+- Semantic drift ölçümünün güvenilir olabilmesi için ticket embedding alanlarının mevcut olması gerektiği görüldü
+- Frontend ve backend arasında anomaly response alanlarının uyumlu hale getirilmesi için ek düzenlemeler yapıldı
+
+**Gelecek hafta hedefim:**
+
+- Final dokümantasyonu tamamlamak
+- Bitirme raporunun performans değerlendirme ve sonuç bölümlerini düzenlemek
+- Demo sırasında kullanılacak ekran görüntülerini ve metrikleri sabitlemek
+- GitHub reposunu son proje yapısına göre temizlemek ve güncellemek
+- Teslim öncesi son genel kontrolü yapmak
 
 ### Hafta 8 *(Tarih: 01.06.2026 - 07.06.2026)*
 
