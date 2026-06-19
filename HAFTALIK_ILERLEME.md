@@ -26,13 +26,57 @@
 | 7 | 18.05 - 24.05 | Anomali tespiti modülünün geliştirilmesi, semantik drift ve örnek anomali senaryolarının test edilmesi | %75 | ✅ Tamamlandı |
 | 8 | 01.06 - 07.06 | API ve frontend entegrasyonunun yapılması, sohbet ekranı ve anomali panelinin birlikte çalışacak şekilde düzenlenmesi | %85 | ✅ Tamamlandı |
 | 9 | 08.06 - 14.06 | Testlerin genişletilmesi, hata senaryolarının kontrol edilmesi, sistem performansının ve yanıt kalitesinin değerlendirilmesi | %93 | ✅ Tamamlandı |
-| 10 | 15.06 - 21.06 | Dokümantasyonun tamamlanması, son hata düzeltmeleri, demo/sunum hazırlığı ve final teslim öncesi genel kontrol | %100 | ⬜ Başlamadı |
+| 10 | 15.06 - 21.06 | Dokümantasyonun tamamlanması, son hata düzeltmeleri, demo/sunum hazırlığı ve final teslim öncesi genel kontrol | %100 | ✅ Tamamlandı |
 
 **Durum simgeleri:** ⬜ Başlamadı | 🔄 Devam Ediyor | ✅ Tamamlandı | ⚠️ Gecikti
 
 ---
 
 ## Haftalık İlerleme Kayıtları
+
+### Hafta 10 *(Tarih: 15.06.2026 - 21.06.2026)*
+
+**Plandaki hedef:**
+- Proje dokümantasyonunun tamamlanması
+- Son hata ve tutarsızlıkların giderilmesi
+- Demo ve sunum hazırlıklarının yapılması
+- Final teslim öncesi sistemin genel kontrolünün gerçekleştirilmesi
+
+**Bu hafta yaptıklarım:**
+- Projenin veri hazırlama, indeksleme, retrieval, RAG, anomali tespiti, API ve frontend bileşenlerini final teslim öncesinde birlikte kontrol ettim
+- README ve çalıştırma adımlarını mevcut sistem yapısına uygun olacak şekilde gözden geçirdim
+- Projenin bağımlılıklarını, veri yollarını, indeks dosyalarını ve değerlendirme çıktılarını kontrol ettim
+- Retrieval değerlendirmesindeki ticket-spesifik sorguların hedef ticket metninden üretilmesi nedeniyle oluşan bilgi sızıntısı riskini tezde açık biçimde belirttim
+- Retrieval başarısının yorumlanmasında genel kategori ve alt kategori sorgularından elde edilen strategy-based metrikleri öne çıkardım
+- Tek doğru dokümanlı sorgularda Precision@5 metriğinin teorik olarak 0,20 ile sınırlı olduğunu açıklayarak sonuçların yanlış yorumlanmasını önledim
+- Sentetik anomali verilerinin dedektör tarafından kullanılan hacim, kategori ve semantik değişim sinyallerine göre oluşturulmasının değerlendirme üzerindeki etkisini sınırlılık olarak raporladım
+- Yanıt doğruluğu bağımsız bir faithfulness veya halüsinasyon metriğiyle ölçülmediği için “güvenilir yanıt” ifadesini “kaynak temelli yanıt” olarak yeniden değerlendirdim
+- Dinamik alpha eşiklerinin mühendislik sezgisine dayalı olarak belirlendiğini ve sabit hibrit yöntemle yapılan ablasyon çalışması üzerinden değerlendirildiğini açıkladım
+- Backend sağlık kontrollerini, sohbet endpointini, retrieval akışını ve anomali endpointlerini demo senaryoları üzerinden kontrol ettim
+- Destek Asistanı ve Anomali İzleme arayüzlerinin birlikte çalışmasını doğruladım
+- Test paketini çalıştırarak mevcut sistem bileşenlerinin final durumunu kontrol ettim
+- Sunumda kullanılacak VPN destek senaryosu, kaynak gösterimi, hibrit arama detayları ve anomali izleme ekranlarını hazırladım
+- Projenin gerçek Özdilek saha verisi içermediğini ve sonuçların kontrollü sentetik/açık veri koşullarını temsil ettiğini dokümantasyonda açıkça belirttim
+
+**Plana göre durumum:**
+- Hafta 10 için belirlenen dokümantasyon, doğrulama ve demo hazırlığı hedefleri tamamlandı
+- Projenin geliştirme süreci planlanan kapsam doğrultusunda %100 seviyesine ulaştı
+- Sistem, final teslimi ve proje sunumu için çalışır bir prototip hâline getirildi
+
+**Karşılaştığım sorunlar / zorluklar:**
+- Ticket-spesifik retrieval sonuçlarının bilgi sızıntısından etkilenmesi nedeniyle sonuçların daha dikkatli ve sınırlılıklarıyla birlikte yorumlanması gerekti
+- Sentetik anomali verileri üzerinde elde edilen yüksek metriklerin gerçek kurum performansı olarak sunulmaması için değerlendirme metni yeniden düzenlendi
+- Yanıt üretim katmanında faithfulness ölçümü bulunmadığından sistemin güvenilirlik iddiasının ölçülen kapsamla uyumlu hâle getirilmesi gerekti
+- Tez, kod, değerlendirme çıktıları ve arayüzde gösterilen metriklerin birbiriyle tutarlı olması için kapsamlı bir son kontrol yapıldı
+
+**Gelecek dönem hedefim:**
+- Sistemi gerçek ve uzmanlar tarafından anonimleştirilmiş kurumsal BT destek verileri üzerinde yeniden değerlendirmek
+- Ticket-spesifik sorgularda hedef dokümanı aday indeksinden çıkararak sızıntısız retrieval değerlendirmesi gerçekleştirmek
+- Yanıtların faithfulness, answer relevancy ve halüsinasyon oranlarını bağımsız değerlendirme yöntemleriyle ölçmek
+- Anomali eşiklerini gerçek kurum verisi ve uzman geri bildirimiyle yeniden kalibre etmek
+- Prototipi kimlik doğrulama, kalıcı oturum yönetimi ve kurumsal sistem entegrasyonlarıyla geliştirmek
+
+---
 
 ### Hafta 9 *(Tarih: 08.06.2026 - 14.06.2026)*
 
