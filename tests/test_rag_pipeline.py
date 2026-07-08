@@ -251,6 +251,29 @@ class TestLLMStub:
         assert "Takip sorusu/duzeltme" in contextual_query
         assert _requires_source_grounded_kb_answer(contextual_query) is True
 
+    def test_explicit_ozdilek_document_question_is_not_folded_into_previous_context(self):
+        """Explicit document lookups should not be treated as vague follow-ups."""
+        history = [
+            {
+                "role": "user",
+                "content": "Switch, firewall, modem, router gibi tüm aktif cihazlarda bakım nasıl yapılıyor?",
+            },
+            {
+                "role": "assistant",
+                "content": "Aktif cihaz bakım tablosu kaynaklardan özetlendi.",
+            },
+        ]
+        question = (
+            "özdilekte YAPAY ZEKA PLATFORMLARI KULLANIM TALİMATInda "
+            "yetkilendirme nasıl yapılıyor kısaca bilgi verir misin"
+        )
+
+        contextual_query = _build_contextual_retrieval_query(question, history)
+
+        assert contextual_query == question
+        assert "Switch" not in contextual_query
+        assert _requires_source_grounded_kb_answer(contextual_query) is True
+
     def test_desktop_laptop_maintenance_answer_extracts_single_table_row(self):
         """Maintenance table lookups should not return the whole device table."""
         docs = [

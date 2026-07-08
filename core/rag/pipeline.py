@@ -509,6 +509,10 @@ def _is_factual_kb_question(question: str) -> bool:
         "ürün",
         "urun",
         "olacak",
+        "nasıl",
+        "nasil",
+        "yapılıyor",
+        "yapiliyor",
         "bahseder",
         "bakar mısın",
         "bakar misin",
@@ -1347,6 +1351,29 @@ def _is_follow_up_question(question: str) -> bool:
     normalized = question.casefold()
     ascii_normalized = _normalize_for_match(question)
     words = normalized.split()
+    explicit_kb_markers = (
+        "ozdilek",
+        "talimat",
+        "dokuman",
+        "belge",
+        "prosedur",
+        "yonerge",
+        "platform",
+        "yapay zeka",
+    )
+    clear_correction_markers = (
+        "az once",
+        "ben sadece",
+        "bunu sordum",
+        "dedigin",
+        "demek istedim",
+        "kastettim",
+        "onceki",
+        "sadece",
+        "sordum",
+        "takip",
+        "yukaridaki",
+    )
     direct_follow_up_markers = (
         "olmadi",
         "olmadı",
@@ -1355,8 +1382,6 @@ def _is_follow_up_question(question: str) -> bool:
         "bunu",
         "nereden",
         "nerde",
-        "nasil",
-        "nasıl",
         "adim",
         "adım",
         "soyledigin",
@@ -1396,10 +1421,18 @@ def _is_follow_up_question(question: str) -> bool:
         "wifi",
     )
 
+    has_explicit_kb_target = len(words) > 5 and any(marker in ascii_normalized for marker in explicit_kb_markers)
+    has_clear_correction = any(marker in ascii_normalized for marker in clear_correction_markers)
+    if has_explicit_kb_target and not has_clear_correction:
+        return False
+
     if any(marker in normalized for marker in direct_follow_up_markers):
         return True
 
     if any(marker in ascii_normalized for marker in normalized_follow_up_markers):
+        return True
+
+    if "nasil" in ascii_normalized and len(words) <= 5:
         return True
 
     return len(words) <= 5 and not any(term in normalized or term in ascii_normalized for term in standalone_it_terms)
