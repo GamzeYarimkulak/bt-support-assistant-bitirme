@@ -36,7 +36,14 @@ QUERY_EXPANSIONS = {
     "printer": ["yazıcı", "network printer", "kuyruk", "sürücü"],
     "wifi": ["kablosuz", "ağ", "bağlantı"],
     "wi-fi": ["wifi", "kablosuz", "ağ"],
-    "erp": ["uygulama", "rapor", "muhasebe", "stok"],
+    "görev": ["rol", "sorumluluk", "sorumlular", "gündem", "organize eder", "takip eder"],
+    "görevleri": ["rol", "sorumluluk", "sorumlular", "gündem", "organize eder", "takip eder"],
+    "görevlerinden": ["rol", "sorumluluk", "sorumlular", "gündem", "organize eder", "takip eder"],
+    "gorev": ["rol", "sorumluluk", "sorumlular", "gundem", "organize eder", "takip eder"],
+    "gorevleri": ["rol", "sorumluluk", "sorumlular", "gundem", "organize eder", "takip eder"],
+    "gorevlerinden": ["rol", "sorumluluk", "sorumlular", "gundem", "organize eder", "takip eder"],
+    "erp": ["sap", "sap erp", "sap hana", "hana", "sap oep", "sap orp", "bw", "ecommerce cloud", "uygulama", "rapor", "muhasebe", "stok"],
+    "sap": ["erp", "sap hana", "hana", "sap oep", "sap orp", "bw"],
 }
 
 
@@ -53,7 +60,7 @@ METADATA_RULES = [
     (("teams", "mikrofon", "toplantı", "chat"), "Teams", None),
     (("yazıcı", "printer", "kuyruk", "sürücü"), "Yazıcı", None),
     (("laptop", "notebook", "güç", "batarya"), "Donanım", "Laptop"),
-    (("erp", "muhasebe", "stok", "crm", "portal"), "Uygulama", None),
+    (("erp", "sap", "hana", "oep", "orp", "muhasebe", "stok", "crm", "portal"), "Uygulama", None),
 ]
 
 # Import settings for KB boost feature flag
@@ -205,6 +212,10 @@ class HybridRetriever:
             metadata_boost = self._metadata_boost(doc, metadata_targets)
             if metadata_boost != 1.0:
                 hybrid_score = hybrid_score * metadata_boost
+
+            domain_boost = self._domain_boost(query, doc)
+            if domain_boost != 1.0:
+                hybrid_score = hybrid_score * domain_boost
             
             result = doc.copy()
             result["score"] = hybrid_score
@@ -213,6 +224,7 @@ class HybridRetriever:
             result["retrieval_method"] = "hybrid"
             result["alpha_used"] = current_alpha if self.use_dynamic_weighting else self.alpha
             result["metadata_boost"] = metadata_boost
+            result["domain_boost"] = domain_boost
             
             hybrid_results.append(result)
         
@@ -293,6 +305,32 @@ class HybridRetriever:
                     boost = max(boost, 1.28)
 
         return boost
+
+    def _domain_boost(self, query: str, doc: Dict[str, Any]) -> float:
+        """Boost domain-specific aliases that generic embeddings often miss."""
+        normalized_query = self._normalize_text(query)
+        doc_surface = self._normalize_text(
+            " ".join(
+                [
+                    str(doc.get("title", "")),
+                    str(doc.get("category", "")),
+                    str(doc.get("subcategory", "")),
+                    str(doc.get("text", ""))[:800],
+                ]
+            )
+        )
+        if "erp" in normalized_query and any(
+            marker in doc_surface for marker in ("sap", "hana", " oep", " orp", "ecommerce cloud")
+        ):
+            return 1.45
+        if (
+            "direkt" in normalized_query
+            and any(marker in normalized_query for marker in ("görev", "gorev", "soruml"))
+            and "direkt" in doc_surface
+            and any(marker in doc_surface for marker in ("bt stratejik plan", "rol sorumluluk", "gündem", "sorumludur"))
+        ):
+            return 1.55
+        return 1.0
     
     def _get_doc_id(self, doc: Dict[str, Any]) -> str:
         """

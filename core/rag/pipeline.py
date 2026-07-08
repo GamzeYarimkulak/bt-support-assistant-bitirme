@@ -4,6 +4,9 @@ Main RAG pipeline orchestrating retrieval and generation.
 
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
+import csv
 import structlog
 import os
 import re
@@ -22,6 +25,7 @@ from core.rag.confidence import ConfidenceEstimator
 from core.nlp.it_relevance import ITRelevanceChecker
 
 logger = structlog.get_logger()
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass
@@ -84,6 +88,17 @@ def generate_answer_with_llm(
     Returns:
         Advisory-style answer in the requested language
     """
+    if not docs:
+        if language == "tr":
+            return "Üzgünüm, bu konuda yeterli bilgi bulunamadı. Lütfen sorunuzu farklı kelimelerle tekrar deneyin veya BT destek ekibiyle iletişime geçin."
+        return "I'm sorry, I couldn't find sufficient information on this topic. Please try rephrasing your question or contact the IT support team."
+
+    direct_kb_docs = _direct_kb_docs_for_question(question, docs)
+    if direct_kb_docs and _extract_relevant_kb_segments(question, direct_kb_docs):
+        if language == "tr":
+            return _build_direct_kb_answer_tr(question, direct_kb_docs)
+        return _build_direct_kb_answer_en(question, direct_kb_docs)
+
     # Check if OpenAI package is available
     if not OPENAI_AVAILABLE:
         logger.warning("openai_package_not_installed_using_stub",
@@ -100,13 +115,7 @@ def generate_answer_with_llm(
                api_key_length=len(api_key) if api_key else 0,
                model=model,
                language=language)
-    
-    if not docs:
-        if language == "tr":
-            return "Üzgünüm, bu konuda yeterli bilgi bulunamadı. Lütfen sorunuzu farklı kelimelerle tekrar deneyin veya BT destek ekibiyle iletişime geçin."
-        else:
-            return "I'm sorry, I couldn't find sufficient information on this topic. Please try rephrasing your question or contact the IT support team."
-    
+
     try:
         # Initialize OpenAI client
         client = OpenAI(api_key=api_key)
@@ -175,15 +184,15 @@ def _build_context_for_llm(docs: List[Dict[str, Any]], language: str) -> str:
     context_parts = []
     
     for i, doc in enumerate(docs[:5], 1):  # Top 5 documents
-        doc_type = doc.get("type", "ticket")
+        doc_type = doc.get("doc_type") or doc.get("type", "ticket")
         
-        if doc_type == "pdf":
+        if _is_kb_document(doc):
             title = doc.get("title", "Dokümantasyon")
-            content = doc.get("content", "")
+            content = doc.get("content") or doc.get("text", "")
             context_parts.append(f"[DÖKÜMAN {i}] {title}\n{content[:1500]}")
         else:
             ticket_id = doc.get("ticket_id", f"TCK-{i:04d}")
-            issue = doc.get("issue_description", "")
+            issue = doc.get("issue_description") or doc.get("short_description", "")
             resolution = doc.get("resolution", "")
             context_parts.append(f"[TICKET {i}] ID: {ticket_id}\nSorun: {issue}\nÇözüm: {resolution[:800]}")
     
@@ -356,6 +365,12 @@ def generate_answer_with_stub(question: str, docs: List[Dict[str, Any]], languag
             return "Mevcut kaynaklara dayanarak güvenilir bir cevap üretemiyorum."
         else:
             return "I cannot provide a reliable answer based on available sources."
+
+    direct_kb_docs = _direct_kb_docs_for_question(question, docs)
+    if direct_kb_docs and _extract_relevant_kb_segments(question, direct_kb_docs):
+        if language == "tr":
+            return _build_direct_kb_answer_tr(question, direct_kb_docs)
+        return _build_direct_kb_answer_en(question, direct_kb_docs)
     
     # Build advisory-style answer using examples from past tickets
     if language == "tr":
@@ -393,6 +408,58 @@ def _doc_solution_text(doc: Dict[str, Any]) -> str:
     return ""
 
 
+def _doc_document_id(doc: Dict[str, Any]) -> str:
+    """Return the parent KB document id for chunk-level search results."""
+    for field in ("document_id", "source_document_id"):
+        value = str(doc.get(field, "") or "").strip()
+        if value:
+            return value
+
+    metadata = doc.get("metadata")
+    if isinstance(metadata, dict):
+        value = str(metadata.get("document_id", "") or "").strip()
+        if value:
+            return value
+
+    identifier = str(doc.get("doc_id", "") or doc.get("id", "") or "").strip()
+    if "_chunk_" in identifier:
+        return identifier.split("_chunk_", 1)[0]
+    return ""
+
+
+@lru_cache(maxsize=1)
+def _processed_kb_documents_by_id() -> Dict[str, str]:
+    """Load full processed KB document text for source-grounded chunk answers."""
+    path = PROJECT_ROOT / "data" / "processed" / "kb_documents.csv"
+    if not path.exists():
+        return {}
+
+    documents: Dict[str, str] = {}
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                document_id = str(row.get("document_id", "") or "").strip()
+                content = str(row.get("content", "") or "").strip()
+                if document_id and content:
+                    documents[document_id] = content
+    except Exception as exc:
+        logger.warning("processed_kb_documents_load_failed", path=str(path), error=str(exc))
+        return {}
+
+    return documents
+
+
+def _full_kb_source_text(doc: Dict[str, Any]) -> str:
+    """Prefer full processed KB document text when a retrieved result is a chunk."""
+    if _is_kb_document(doc):
+        document_id = _doc_document_id(doc)
+        if document_id:
+            full_text = _processed_kb_documents_by_id().get(document_id, "").strip()
+            if full_text:
+                return full_text
+    return _doc_solution_text(doc)
+
+
 def _source_label_tr(doc_type: str) -> str:
     normalized = str(doc_type or "").casefold()
     if normalized in {"kb", "document", "pdf"}:
@@ -405,6 +472,719 @@ def _source_label_en(doc_type: str) -> str:
     if normalized in {"kb", "document", "pdf"}:
         return "Knowledge document"
     return "Ticket"
+
+
+def _is_kb_document(doc: Dict[str, Any]) -> bool:
+    doc_type = str(doc.get("doc_type") or doc.get("type") or "").casefold()
+    return doc_type in {"kb", "document", "pdf"} or str(doc.get("id", "")).startswith("ozdilek_kb_")
+
+
+def _should_use_direct_kb_answer(question: str, docs: List[Dict[str, Any]]) -> bool:
+    """Use direct source-grounded answers for factual KB/document questions."""
+    return bool(_direct_kb_docs_for_question(question, docs))
+
+
+def _is_factual_kb_question(question: str) -> bool:
+    """Return True when the user asks for a factual value from documents."""
+    normalized = question.casefold()
+    ascii_normalized = _normalize_for_match(question)
+
+    factual_markers = (
+        "hangi",
+        "nedir",
+        "ne ",
+        "kim",
+        "kaç",
+        "kac",
+        "nerede",
+        "nereden",
+        "kullanılır",
+        "kullanilir",
+        "belirtil",
+        "söyler",
+        "soyler",
+        "yazar",
+        "hakkında",
+        "hakkinda",
+        "ürün",
+        "urun",
+        "olacak",
+        "bahseder",
+        "bakar mısın",
+        "bakar misin",
+    )
+    return any(marker in normalized or marker in ascii_normalized for marker in factual_markers)
+
+
+def _requires_source_grounded_kb_answer(question: str) -> bool:
+    """Identify document lookup questions that should not be answered creatively."""
+    if not _is_factual_kb_question(question):
+        return False
+
+    normalized = question.casefold()
+    ascii_normalized = _normalize_for_match(question)
+    source_markers = (
+        "özdilek",
+        "ozdilek",
+        "strateji",
+        "talimat",
+        "yönerge",
+        "yonerge",
+        "prosedür",
+        "prosedur",
+        "doküman",
+        "dokuman",
+        "belge",
+        "bölüm",
+        "bolum",
+        "kısım",
+        "kisim",
+        "ürün",
+        "urun",
+        "kullanılıyor",
+        "kullaniliyor",
+        "kullanılır",
+        "kullanilir",
+        "olacakmış",
+        "olacakmis",
+        "aksiyon planı",
+        "aksiyon plani",
+    )
+    return any(marker in normalized or marker in ascii_normalized for marker in source_markers)
+
+
+def _direct_kb_docs_for_question(question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Select KB/document candidates for direct factual answering."""
+    if not docs or not _is_factual_kb_question(question):
+        return []
+
+    kb_docs = [doc for doc in docs[:5] if _is_kb_document(doc)]
+    if not kb_docs:
+        return []
+
+    if _requires_source_grounded_kb_answer(question) or _is_kb_document(docs[0]):
+        return kb_docs
+    return []
+
+
+_KB_STOPWORDS = {
+    "acaba", "ama", "bana", "bende", "benim", "bir", "bunu", "hangi", "hakkinda",
+    "hakkında", "icin", "için", "kismi", "kısmı", "kisminda", "kısmında", "mi",
+    "ne", "nedir", "olan", "olarak", "soru", "sordum", "su", "şu", "ve", "veya",
+    "ver", "bilgi", "bilgisi", "özdilek", "ozdilek", "peki", "bakar", "misin",
+    "mısın", "teknoloji", "teknolojileri", "strateji", "stratejisi", "donanimsal",
+    "donanımsal", "donanim", "donanım", "bolum", "bölüm", "bolumu", "bölümü",
+}
+
+
+def _normalize_for_match(text: str) -> str:
+    translation = str.maketrans(
+        "çğıöşüÇĞİÖŞÜ",
+        "cgiosuCGIOSU",
+    )
+    normalized = text.translate(translation).casefold()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _query_terms(question: str) -> set[str]:
+    terms: set[str] = set()
+    suffixes = (
+        "lerinde", "larinda", "lerinde", "lerinde", "lerinden", "larindan",
+        "lerinden", "larindan", "inden", "indan", "ından", "lerden", "lardan",
+        "sinde", "sinda", "daki", "deki", "daki", "den", "dan", "leri",
+        "lari", "ları", "leri", "lar", "ler", "dir", "tir", "nin", "nın",
+        "in", "un", "de", "da",
+    )
+    for token in _normalize_for_match(question).split():
+        if len(token) < 3 or token in _KB_STOPWORDS:
+            continue
+        terms.add(token)
+        for suffix in suffixes:
+            if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+                terms.add(token[: -len(suffix)])
+                break
+    return terms
+
+
+def _split_kb_segments(text: str) -> List[str]:
+    clean_text = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not clean_text:
+        return []
+
+    numbered_segments = re.split(r"(?=\b\d+(?:\.\d+)+\.?\s*)", clean_text)
+    segments: List[str] = []
+    for segment in numbered_segments:
+        segment = segment.strip(" -")
+        if not segment:
+            continue
+        if len(segment) > 450:
+            segments.extend(part.strip() for part in re.split(r"(?<=[.!?])\s+", segment) if part.strip())
+        else:
+            segments.append(segment)
+    return segments
+
+
+def _clean_kb_answer_segment(segment: str) -> str:
+    """Remove common PDF/form headers before showing a KB sentence to users."""
+    text = re.sub(r"\s+", " ", str(segment or "")).strip(" -")
+    if not text:
+        return ""
+
+    metadata_markers = (
+        "DOKÜMAN",
+        "DOKUMAN",
+        "REVİZYON",
+        "REVIZYON",
+        "YÜRÜRLÜK",
+        "YURURLUK",
+        "HAZIRLAYAN",
+        "ONAY",
+        "KODU",
+        "KOD NO",
+    )
+    prefix = _normalize_for_match(text[:360])
+    has_metadata_prefix = any(_normalize_for_match(marker) in prefix for marker in metadata_markers)
+
+    if has_metadata_prefix:
+        page_section_match = re.search(r"\[Page\s+\d+\]\s*\d+\.?\s*", text, flags=re.IGNORECASE)
+        if page_section_match:
+            text = text[page_section_match.end():].strip()
+        else:
+            numbered_match = re.search(r"\b\d+\.\s*(?=[A-ZÇĞİÖŞÜa-zçğıöşü])", text)
+            if numbered_match and numbered_match.start() > 20:
+                text = text[numbered_match.end():].strip()
+
+    text = re.sub(r"^\[Page\s+\d+\]\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", text).strip()
+    return text
+
+
+def _is_action_plan_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    return (
+        "aksiyon" in normalized
+        and "plan" in normalized
+        or "enerji yonetimi" in normalized
+    )
+
+
+def _is_erp_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    return "erp" in normalized or ("sap" in normalized and "sistem" in normalized)
+
+
+def _is_director_responsibility_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    return (
+        "direktor" in normalized
+        and ("gorev" in normalized or "soruml" in normalized or "ne yap" in normalized or "bahseder" in normalized)
+    )
+
+
+def _extract_between_labels(text: str, start_label: str, end_labels: tuple[str, ...]) -> str:
+    start = text.find(start_label)
+    if start < 0:
+        return ""
+    start += len(start_label)
+    end_positions = [text.find(label, start) for label in end_labels if text.find(label, start) >= 0]
+    end = min(end_positions) if end_positions else len(text)
+    return re.sub(r"\s+", " ", text[start:end]).strip(" :-")
+
+
+def _extract_action_plan_segments(doc: Dict[str, Any]) -> List[Dict[str, str]]:
+    text = _full_kb_source_text(doc)
+    title = _doc_title(doc)
+    doc_id = _doc_identifier(doc)
+
+    fields = [
+        (
+            "Proje amacı/hedefi",
+            _extract_between_labels(
+                text,
+                "Proje Amacı/Hedefi:",
+                ("Proje Başlangıç Tarihi:", "Proje Tanımı:", "Proje Bütçesi"),
+            ),
+        ),
+        (
+            "Proje tanımı",
+            _extract_between_labels(
+                text,
+                "Proje Tanımı:",
+                ("Proje Bütçesi", "Gerçekleşen Maliyet:", "Proje Planlama"),
+            ),
+        ),
+        (
+            "Aksiyonlar",
+            _extract_between_labels(
+                text,
+                "Proje Planlama Aksiyonları:",
+                ("Proje Sonuçlarının Doğrulanması:", "Sonuçların Değerlendirmesi:"),
+            ),
+        ),
+        (
+            "Proje sonuçlarının doğrulanması",
+            _extract_between_labels(
+                text,
+                "Proje Sonuçlarının Doğrulanması:",
+                ("Sonuçların Değerlendirmesi:", "Sorumlular:"),
+            ),
+        ),
+        (
+            "Sonuçların değerlendirmesi",
+            _extract_between_labels(
+                text,
+                "Sonuçların Değerlendirmesi:",
+                ("Sorumlular:", "[Page 1]", "[Page 2]", "İletişim/Eğitim Planı:", "Proje iyileştirmelerinin sürdürülmesi:"),
+            ),
+        ),
+    ]
+
+    segments: List[Dict[str, str]] = []
+    for label, value in fields:
+        if not value:
+            continue
+        segments.append(
+            {
+                "segment": f"{label}: {value}",
+                "title": title,
+                "doc_id": doc_id,
+            }
+        )
+    return segments
+
+
+def _is_desktop_laptop_maintenance_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    has_device = (
+        ("dizustu" in normalized or "laptop" in normalized)
+        and ("masaustu" in normalized or "bilgisayar" in normalized)
+    )
+    has_maintenance_intent = any(
+        marker in normalized
+        for marker in ("bakim", "soruml", "sure", "aralik", "kim", "kac", "yilda")
+    )
+    return has_device and has_maintenance_intent
+
+
+def _extract_desktop_laptop_maintenance_segments(docs: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    device_label = "Dizüstü ve masaüstü bilgisayar ve aksamları"
+    next_device_pattern = (
+        r"Tüm yazıcılar|Tum yazicilar|Plotterlar|Adisyon|El Terminalleri|"
+        r"Switch|Sunucular|POS Kasa|POS Sunucuları|POS Sunuculari|POS Kiosk|Firewall"
+    )
+
+    for doc in docs[:5]:
+        if not _is_kb_document(doc):
+            continue
+
+        title = _doc_title(doc)
+        doc_id = _doc_identifier(doc)
+        source_text = re.sub(r"\s+", " ", _full_kb_source_text(doc)).strip()
+        match = re.search(
+            rf"({re.escape(device_label)})\s+(.*?)(?=\s+(?:{next_device_pattern})\b|$)",
+            source_text,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            continue
+
+        row_tail = match.group(2).strip(" :-")
+        interval = ""
+        interval_match = re.search(r"\b(\d+)\s*$", row_tail)
+        if interval_match:
+            interval = interval_match.group(1)
+            row_tail = row_tail[: interval_match.start()].strip(" :-")
+
+        responsible = row_tail
+        maintainer = ""
+        for marker in ("İç Kaynaklar", "Dış Kaynaklar", "Ic Kaynaklar", "Dis Kaynaklar"):
+            idx = row_tail.find(marker)
+            if idx >= 0:
+                responsible = row_tail[:idx].strip(" :-")
+                maintainer = row_tail[idx:].strip(" :-")
+                break
+
+        details = [f"{device_label}: sorumlu birim {responsible or row_tail}"]
+        if maintainer:
+            details.append(f"bakımı yapan {maintainer}")
+        if interval:
+            details.append(f"bakım aralığı yılda {interval}")
+
+        return [
+            {
+                "segment": "; ".join(details) + ".",
+                "title": title,
+                "doc_id": doc_id,
+            }
+        ]
+
+    return []
+
+
+def _extract_erp_segments(docs: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Return SAP/ERP-related source snippets for Özdilek system questions."""
+    markers = ("sap", "hana", " oep", " orp", "ecommerce cloud", "bw ")
+    selected: List[Dict[str, str]] = []
+    seen: set[str] = set()
+
+    def summarize_sap_evidence(title: str, segment: str) -> str:
+        surface = _normalize_for_match(f"{title} {segment}")
+        components: List[str] = []
+        for marker, label in (
+            ("hana", "SAP HANA"),
+            ("orp", "SAP ORP"),
+            ("oep", "SAP OEP"),
+            ("retail", "SAP Retail"),
+            ("uretim", "SAP Üretim"),
+            ("ecommerce cloud", "SAP ecommerce cloud"),
+            ("bw", "BW raporlama"),
+        ):
+            if marker in surface and label not in components:
+                components.append(label)
+
+        if not components:
+            components.append("SAP")
+
+        excerpt = re.sub(r"\s+", " ", segment).strip()
+        if len(excerpt) > 240:
+            excerpt = excerpt[:237].rstrip() + "..."
+
+        component_text = ", ".join(components)
+        return (
+            "Özdilek kaynaklarında ERP/SAP sistemi olarak SAP geçiyor. "
+            f"İlgili kaynakta {component_text} ifadesi yer alıyor. "
+            f"Kaynak ifadesi: {excerpt}"
+        )
+
+    for doc in docs[:5]:
+        if not _is_kb_document(doc):
+            continue
+
+        title = _doc_title(doc)
+        doc_id = _doc_identifier(doc)
+        source_text = _doc_solution_text(doc)
+        title_surface = _normalize_for_match(title)
+        doc_surface = _normalize_for_match(f"{title} {source_text[:1200]}")
+
+        if not any(marker.strip() in doc_surface for marker in markers):
+            continue
+
+        candidate_segments = _split_kb_segments(source_text) or [source_text]
+        for segment in candidate_segments:
+            segment_surface = _normalize_for_match(f"{title} {segment}")
+            if not any(marker.strip() in segment_surface for marker in markers):
+                continue
+
+            key = _normalize_for_match(f"{title} {segment}")[:220]
+            if key in seen:
+                continue
+            seen.add(key)
+
+            label = "ERP/SAP kaynağı"
+            if "hana" in title_surface or "hana" in segment_surface:
+                label = "SAP HANA kaynağı"
+            elif "oep" in title_surface or "orp" in title_surface:
+                label = "SAP sistem kaynağı"
+
+            selected.append(
+                {
+                    "segment": summarize_sap_evidence(title, segment),
+                    "title": title,
+                    "doc_id": doc_id,
+                }
+            )
+            break
+
+        if len(selected) >= 3:
+            break
+
+    return selected
+
+
+def _extract_director_responsibility_segments(docs: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Extract role/responsibility blocks for BT and Ar-Ge director questions."""
+    role_pattern = re.compile(
+        r"(?:Bilgi Teknolojileri ve Ar-?Ge Direktörü|BT ve Ar-?Ge Direktörü):?\s*"
+        r"(?P<body>.*?)"
+        r"(?=(?:İç Denetim Müdürü|İlgili BT Birim Yöneticisi|E-Commerce BT Yöneticisi|"
+        r"Tedarik Zinciri Direktörlüğü|DOKÜMAN ONAY|DOKÜMAN SON|REVİZYON|5\.DAĞITIM|"
+        r"\b\d+\.[A-ZÇĞİÖŞÜ]|$))",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    selected: List[Dict[str, str]] = []
+    seen: set[str] = set()
+
+    for doc in docs[:5]:
+        if not _is_kb_document(doc):
+            continue
+
+        title = _doc_title(doc)
+        doc_id = _doc_identifier(doc)
+        source_text = _full_kb_source_text(doc)
+        normalized_surface = _normalize_for_match(f"{title} {source_text[:1500]}")
+        if "direktor" not in normalized_surface or "soruml" not in normalized_surface:
+            continue
+
+        for match in role_pattern.finditer(source_text):
+            body = re.sub(r"\s+", " ", match.group("body")).strip(" :-")
+            if len(body) < 25:
+                continue
+            if not any(marker in body for marker in ("•", "sorumludur", "BT Stratejik", "Alımlar", "gündem", "yönlendirmeyi")):
+                continue
+
+            key = _normalize_for_match(f"{title} {body}")[:220]
+            if key in seen:
+                continue
+            seen.add(key)
+            selected.append(
+                {
+                    "segment": f"Bilgi Teknolojileri ve Ar-Ge Direktörü görevleri: {body}",
+                    "title": title,
+                    "doc_id": doc_id,
+                }
+            )
+            break
+
+        if len(selected) >= 3:
+            break
+
+    return selected
+
+
+def _is_product_name_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    return "urun" in normalized or "hangi urun" in normalized or "hangi model" in normalized
+
+
+def _has_specific_named_value(segment: str) -> bool:
+    normalized = _normalize_for_match(segment)
+    known_values = (
+        "sap",
+        "hana",
+        "point mobile",
+        "lukhan sewoo",
+        "xplore",
+        "cisco",
+        "dell",
+        "hp",
+    )
+    if any(value in normalized for value in known_values):
+        return True
+    return bool(re.search(r"\b[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Z0-9][A-Za-z0-9-]+){1,4}\s+\d", segment))
+
+
+def _extract_relevant_kb_segments(question: str, docs: List[Dict[str, Any]], limit: int = 3) -> List[Dict[str, str]]:
+    terms = _query_terms(question)
+    terminal_question = any(term.startswith("terminal") for term in terms)
+    adisyon_question = "adisyon" in terms
+    mobile_printer_question = "mobil" in terms and any(term.startswith("yazici") for term in terms)
+
+    if _is_desktop_laptop_maintenance_question(question):
+        maintenance_segments = _extract_desktop_laptop_maintenance_segments(docs)
+        if maintenance_segments:
+            return maintenance_segments
+
+    if _is_director_responsibility_question(question):
+        director_segments = _extract_director_responsibility_segments(docs)
+        if director_segments:
+            return director_segments
+
+    if _is_erp_question(question):
+        erp_segments = _extract_erp_segments(docs)
+        if erp_segments:
+            return erp_segments
+
+    if _is_action_plan_question(question):
+        for doc in docs[:5]:
+            if not _is_kb_document(doc):
+                continue
+            normalized_doc = _normalize_for_match(_doc_title(doc) + " " + _doc_solution_text(doc)[:500])
+            if "aksiyon" in normalized_doc and "plan" in normalized_doc:
+                action_plan_segments = _extract_action_plan_segments(doc)
+                if action_plan_segments:
+                    return action_plan_segments
+
+    candidates: List[Dict[str, Any]] = []
+
+    for doc_rank, doc in enumerate(docs[:5]):
+        if not _is_kb_document(doc):
+            continue
+        doc_candidates: List[Dict[str, Any]] = []
+        title = _doc_title(doc)
+        doc_id = _doc_identifier(doc)
+        source_text = _doc_solution_text(doc)
+        for segment in _split_kb_segments(source_text):
+            normalized_segment = _normalize_for_match(segment)
+            if terminal_question and "terminal" not in normalized_segment:
+                continue
+            if terminal_question and not adisyon_question and "adisyon" in normalized_segment:
+                continue
+            if mobile_printer_question and not ("mobil" in normalized_segment and "yazici" in normalized_segment):
+                continue
+            overlap = sum(1 for term in terms if term in normalized_segment)
+            if overlap <= 0:
+                continue
+            score = overlap + max(0, 5 - doc_rank) * 0.2
+            if any(term in normalized_segment for term in ("terminal", "point mobile", "xplore")):
+                score += 1.5
+            if mobile_printer_question and "lukhan sewoo" in normalized_segment:
+                score += 2.0
+            doc_candidates.append(
+                {
+                    "score": score,
+                    "segment": segment,
+                    "title": title,
+                    "doc_id": doc_id,
+                }
+            )
+        if doc_rank == 0 and doc_candidates:
+            candidates = doc_candidates
+            break
+        candidates.extend(doc_candidates)
+
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+
+    selected: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        cleaned_segment = _clean_kb_answer_segment(candidate["segment"])
+        if not cleaned_segment:
+            continue
+        key = _normalize_for_match(cleaned_segment)[:180]
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append(
+            {
+                "segment": cleaned_segment,
+                "title": candidate["title"],
+                "doc_id": candidate["doc_id"],
+            }
+        )
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _build_direct_kb_answer_tr(question: str, docs: List[Dict[str, Any]]) -> str:
+    segments = _extract_relevant_kb_segments(question, docs)
+
+    if not segments:
+        return (
+            f"Sorunuz: {question}\n\n"
+            "Kaynaklarda bu soruya doğrudan karşılık gelen bir bilgi bulunamadı."
+        )
+
+    if _is_product_name_question(question) and not any(_has_specific_named_value(item["segment"]) for item in segments):
+        answer_parts = [
+            f"Sorunuz: {question}\n",
+            "\n**Kısa cevap:**\n",
+            "Kaynaklarda bu soru için açık bir ürün/model adı bulunamadı.\n",
+            "\n**Kaynakta geçen en yakın ifadeler:**\n",
+        ]
+        for item in segments:
+            answer_parts.append(f"- {item['segment']}\n")
+    else:
+        answer_parts = [
+            f"Sorunuz: {question}\n",
+            "\n**Kısa cevap:**\n",
+            "Kaynakta geçen bilgiye göre aşağıdaki noktalar öne çıkıyor.\n",
+            "\n**Kaynakta geçenler:**\n",
+        ]
+        for item in segments:
+            answer_parts.append(f"- {item['segment']}\n")
+
+    source_refs: List[str] = []
+    seen_sources: set[str] = set()
+    for item in segments:
+        source_key = f"{item['title']} ({item['doc_id']})"
+        if source_key not in seen_sources:
+            seen_sources.add(source_key)
+            source_refs.append(source_key)
+
+    if len(source_refs) == 1:
+        answer_parts.append(f"\n**Kullanılan kaynak:** {source_refs[0]}")
+    else:
+        answer_parts.append("\n**Kullanılan kaynaklar:**\n")
+        for source_ref in source_refs:
+            answer_parts.append(f"- {source_ref}\n")
+    return "".join(answer_parts)
+
+
+def _build_direct_kb_answer_en(question: str, docs: List[Dict[str, Any]]) -> str:
+    segments = _extract_relevant_kb_segments(question, docs)
+
+    if not segments:
+        return (
+            f"Your question: {question}\n\n"
+            "No directly matching information was found in the available sources."
+        )
+
+    if _is_product_name_question(question) and not any(_has_specific_named_value(item["segment"]) for item in segments):
+        answer_parts = [
+            f"Your question: {question}\n",
+            "\nNo explicit product/model name was found for this question in the sources. Closest source statements:\n",
+        ]
+        for item in segments:
+            answer_parts.append(f"- {item['segment']}\n")
+    else:
+        answer_parts = [
+            f"Your question: {question}\n",
+            "\nAccording to the retrieved source:\n",
+        ]
+        for item in segments:
+            answer_parts.append(f"- {item['segment']}\n")
+
+    source_refs: List[str] = []
+    seen_sources: set[str] = set()
+    for item in segments:
+        source_key = f"{item['title']} ({item['doc_id']})"
+        if source_key not in seen_sources:
+            seen_sources.add(source_key)
+            source_refs.append(source_key)
+
+    if len(source_refs) == 1:
+        answer_parts.append(f"\nSource: {source_refs[0]}")
+    else:
+        answer_parts.append("\nSources:\n")
+        for source_ref in source_refs:
+            answer_parts.append(f"- {source_ref}\n")
+    return "".join(answer_parts)
+
+
+def _docs_for_direct_segments(docs: List[Dict[str, Any]], segments: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    """Keep source metadata aligned with the source snippets used in direct answers."""
+    segment_doc_ids = {str(item.get("doc_id", "") or "").strip() for item in segments if item.get("doc_id")}
+    segment_titles = {
+        _normalize_for_match(str(item.get("title", "") or ""))
+        for item in segments
+        if item.get("title")
+    }
+    if not segment_doc_ids and not segment_titles:
+        return docs
+
+    def id_family(identifier: str) -> set[str]:
+        values = {identifier} if identifier else set()
+        if "_chunk_" in identifier:
+            values.add(identifier.split("_chunk_", 1)[0])
+        return values
+
+    segment_id_families: set[str] = set()
+    for identifier in segment_doc_ids:
+        segment_id_families.update(id_family(identifier))
+
+    filtered: List[Dict[str, Any]] = []
+    for doc in docs:
+        doc_ids = id_family(_doc_identifier(doc))
+        doc_ids.update(id_family(_doc_document_id(doc)))
+        title = _normalize_for_match(_doc_title(doc))
+        id_matches = bool(doc_ids & segment_id_families)
+        title_matches = title in segment_titles if title else False
+        if id_matches or title_matches:
+            filtered.append(doc)
+
+    return filtered or docs
 
 
 def _combined_doc_text(question: str, docs: List[Dict[str, Any]]) -> str:
@@ -423,9 +1203,14 @@ def _combined_doc_text(question: str, docs: List[Dict[str, Any]]) -> str:
 
 def _infer_support_scenario(question: str, docs: List[Dict[str, Any]]) -> str:
     text = _combined_doc_text(question, docs)
+    normalized_text = _normalize_for_match(text)
 
     if any(term in text for term in ("vpn", "forticlient", "remote access", "uzaktan erişim")):
         return "vpn"
+    if any(term in normalized_text for term in ("disk alani", "disk dol", "depolama", "bos alan", "storage")):
+        return "storage"
+    if any(term in normalized_text for term in ("laptop", "dizustu", "masaustu", "yavas", "performans", "bellek", "ram")):
+        return "performance"
     if any(term in text for term in ("mail", "e-posta", "outlook", "exchange", "posta kutusu", "kota")):
         return "mail"
     if any(term in text for term in ("mfa", "authenticator", "token", "şifre", "parola", "sso", "hesap kilit")):
@@ -453,6 +1238,20 @@ def _action_steps_tr(question: str, docs: List[Dict[str, Any]]) -> List[str]:
             "Posta kutusu kotasını ve ek boyutu limitlerini kontrol edin; kota doluysa eski/iri iletileri arşivleyin.",
             "Exchange bağlantısı, mail flow ve varsa NDR/hata kodu bilgisini not edin.",
             "Sorun devam ederse BT ekibinden kullanıcı mailbox, connector ve servis sağlığı kontrollerini istemek gerekir.",
+        ]
+    if scenario == "storage":
+        return [
+            "Disk alanını kontrol edin; gereksiz geçici dosya, indirilenler ve eski kurulum dosyaları için temizlik yapın.",
+            "Büyük dosya ve klasörleri belirleyip kurum politikasına uygunsa arşivleyin veya güvenli silme işlemi uygulayın.",
+            "Geri Dönüşüm Kutusu, tarayıcı önbelleği ve uygulama cache alanlarını temizleyerek boş alan kazanmaya çalışın.",
+            "Disk alanı tekrar hızla doluyorsa dosya yolu, hata mesajı ve kullanıcı bilgisini BT ekibine iletin.",
+        ]
+    if scenario == "performance":
+        return [
+            "Laptop performans sorunu için CPU, disk kullanımı ve bellek doluluk oranını Görev Yöneticisi'nden kontrol edin.",
+            "Disk temizlik işlemi yapın, gereksiz başlangıç uygulamalarını kapatın ve yeterli boş alan olduğunu doğrulayın.",
+            "Windows, sürücü ve güvenlik güncelleme durumunu kontrol ederek eksik güncellemeleri planlı şekilde tamamlayın.",
+            "Sorun sürerse cihaz modeli, bellek miktarı, disk sağlığı ve yavaşlığın ne zaman başladığını BT ekibine iletin.",
         ]
     if scenario == "identity":
         return [
@@ -501,6 +1300,20 @@ def _action_steps_en(question: str, docs: List[Dict[str, Any]]) -> List[str]:
             "Record Exchange connectivity, mail-flow, and NDR/error-code details.",
             "If it continues, ask IT to check the mailbox, connector, and service health.",
         ]
+    if scenario == "storage":
+        return [
+            "Check disk space and clean temporary files, downloads, and old installer files.",
+            "Identify large files and folders, then archive them or delete them according to company policy.",
+            "Empty the recycle bin, browser cache, and application cache to recover storage space.",
+            "If disk space fills up again quickly, send the file path, error message, and user details to IT.",
+        ]
+    if scenario == "performance":
+        return [
+            "Check laptop performance in Task Manager, especially CPU, disk usage, and memory consumption.",
+            "Run disk cleanup, disable unnecessary startup apps, and verify that enough free space remains.",
+            "Check Windows, driver, and security update status and complete missing updates in a planned way.",
+            "If it continues, send the device model, memory amount, disk health, and when the slowdown started to IT.",
+        ]
     if scenario == "identity":
         return [
             "Check password expiry, account lockout, and MFA device registration.",
@@ -520,8 +1333,19 @@ def _message_content(message: Dict[str, Any]) -> str:
     return str(message.get("content") or message.get("text") or "").strip()
 
 
+def _previous_user_issue(conversation_history: Optional[List[Dict[str, Any]]]) -> str:
+    for message in reversed(conversation_history or []):
+        if message.get("role") != "user":
+            continue
+        content = _message_content(message)
+        if content:
+            return content
+    return ""
+
+
 def _is_follow_up_question(question: str) -> bool:
     normalized = question.casefold()
+    ascii_normalized = _normalize_for_match(question)
     words = normalized.split()
     direct_follow_up_markers = (
         "olmadi",
@@ -540,6 +1364,20 @@ def _is_follow_up_question(question: str) -> bool:
         "uyguladim",
         "uyguladım",
         "sonra ne",
+    )
+    normalized_follow_up_markers = (
+        "az once",
+        "ben sadece",
+        "bunu sordum",
+        "dedigin",
+        "demek istedim",
+        "kastettim",
+        "onceki",
+        "sadece",
+        "sordum",
+        "soyledigin",
+        "takip",
+        "yukaridaki",
     )
     standalone_it_terms = (
         "vpn",
@@ -561,29 +1399,35 @@ def _is_follow_up_question(question: str) -> bool:
     if any(marker in normalized for marker in direct_follow_up_markers):
         return True
 
-    return len(words) <= 5 and not any(term in normalized for term in standalone_it_terms)
+    if any(marker in ascii_normalized for marker in normalized_follow_up_markers):
+        return True
+
+    return len(words) <= 5 and not any(term in normalized or term in ascii_normalized for term in standalone_it_terms)
+
+
+def _build_contextual_question(
+    question: str,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """Resolve short corrections/follow-ups against the latest user issue."""
+    if not conversation_history or not _is_follow_up_question(question):
+        return question
+
+    previous_issue = _previous_user_issue(conversation_history)
+    if not previous_issue:
+        return question
+
+    if len(previous_issue) > 240:
+        previous_issue = previous_issue[:240]
+
+    return f"{previous_issue}\nTakip sorusu/duzeltme: {question}"
 
 def _build_contextual_retrieval_query(
     question: str,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """Use the previous user issue for short follow-up questions without changing the visible answer."""
-    if not conversation_history or not _is_follow_up_question(question):
-        return question
-
-    previous_user_messages = [
-        _message_content(message)
-        for message in conversation_history
-        if message.get("role") == "user" and _message_content(message)
-    ]
-    if not previous_user_messages:
-        return question
-
-    previous_issue = previous_user_messages[-1]
-    if len(previous_issue) > 240:
-        previous_issue = previous_issue[:240]
-
-    return f"{previous_issue}\nTakip sorusu: {question}"
+    return _build_contextual_question(question, conversation_history)
 
 
 def _build_advisory_answer_tr(question: str, docs: List[Dict[str, Any]]) -> str:
@@ -600,13 +1444,13 @@ def _build_advisory_answer_tr(question: str, docs: List[Dict[str, Any]]) -> str:
     """
     answer_parts = [
         f"Sorunuz: {question}\n",
-        "\nÖnerilen ilk kontroller:\n"
+        "\n**Sizin deneyebileceğiniz adımlar:**\n"
     ]
 
     for index, step in enumerate(_action_steps_tr(question, docs), 1):
         answer_parts.append(f"{index}. {step}\n")
 
-    answer_parts.append("\nBenzer durumlarda BT ekibinin uyguladığı örnek çözümler:\n")
+    answer_parts.append("\n**Geçmiş benzer kayıtlarda incelenenler:**\n")
     
     # Show top 3 usable examples. Ticket documents use resolution; KB chunks use text/content.
     examples_rendered = 0
@@ -621,30 +1465,16 @@ def _build_advisory_answer_tr(question: str, docs: List[Dict[str, Any]]) -> str:
         
         if short_desc and resolution:
             examples_rendered += 1
-            # Header
             source_label = _source_label_tr(doc_type)
-            answer_parts.append(f"\n{'='*70}")
-            answer_parts.append(f"\n📖 Örnek {examples_rendered} ({source_label}: {ticket_id})")
-            answer_parts.append(f"\n{'='*70}")
-            answer_parts.append(f"\n**Durum:** {short_desc}\n")
+            answer_parts.append(f"\n**Örnek {examples_rendered} - {source_label}: {ticket_id}**\n")
+            answer_parts.append(f"- **Durum:** {short_desc}\n")
             
-            # Format resolution with better structure
             formatted_resolution = _format_resolution_text(resolution, doc_type)
-            answer_parts.append(f"\n**Uygulanan Çözüm:**\n{formatted_resolution}\n")
+            answer_parts.append(f"- **Uygulanan Çözüm:**\n{formatted_resolution}\n")
     
-    # Add advisory conclusion
-    answer_parts.append("\n" + "="*70)
-    answer_parts.append("\n💡 **Öneriler:**")
-    answer_parts.append("\n" + "="*70)
-    answer_parts.append(
-        "\nBu örneklerden yola çıkarak:"
-    )
-    answer_parts.append(
-        "\n✓ Benzer adımları kendiniz deneyebilirsiniz, VEYA"
-    )
-    answer_parts.append(
-        "\n✓ BT destek ekibinden bu çözümleri uygulamalarını talep edebilirsiniz."
-    )
+    answer_parts.append("\n**Ne zaman BT ekibine iletilmeli?**\n")
+    answer_parts.append("- Yukarıdaki kontrollerden sonra sorun sürüyorsa hata kodu, saat, ekran görüntüsü ve etkilenen kullanıcı bilgisini ekleyin.\n")
+    answer_parts.append("- Benzer geçmiş adımları referans göstererek BT destek ekibinden kontrol veya uygulama talep edebilirsiniz.\n")
     
     if len(docs) > examples_rendered:
         answer_parts.append(
@@ -695,19 +1525,19 @@ def _format_resolution_text(text: str, doc_type: str) -> str:
         # Detect and format numbered steps
         if any(line.lower().startswith(f"{num}.") or line.lower().startswith(f"{num})") 
                for num in range(1, 20)):
-            formatted_lines.append(f"   {line}")
+            formatted_lines.append(line)
         
         # Detect and format bullet points
         elif line.startswith('•') or line.startswith('-') or line.startswith('*'):
-            formatted_lines.append(f"   {line}")
+            formatted_lines.append(line)
         
         # Detect keywords for steps
         elif any(keyword in line.lower() for keyword in ['adım', 'işlem', 'kontrol edin', 'yapınız', 'tıklayın']):
-            formatted_lines.append(f"   ▸ {line}")
+            formatted_lines.append(f"- {line}")
         
         # Regular lines
         else:
-            formatted_lines.append(f"   {line}")
+            formatted_lines.append(f"- {line}")
     
     return '\n'.join(formatted_lines)
 
@@ -726,13 +1556,13 @@ def _build_advisory_answer_en(question: str, docs: List[Dict[str, Any]]) -> str:
     """
     answer_parts = [
         f"Your question: {question}\n",
-        "\nRecommended first checks:\n"
+        "\n**Steps you can try first:**\n"
     ]
 
     for index, step in enumerate(_action_steps_en(question, docs), 1):
         answer_parts.append(f"{index}. {step}\n")
 
-    answer_parts.append("\nExample solutions applied by the IT team in similar cases:\n")
+    answer_parts.append("\n**What was checked in similar past tickets:**\n")
     
     # Show top 3 usable examples. Ticket documents use resolution; KB chunks use text/content.
     examples_rendered = 0
@@ -747,30 +1577,16 @@ def _build_advisory_answer_en(question: str, docs: List[Dict[str, Any]]) -> str:
         
         if short_desc and resolution:
             examples_rendered += 1
-            # Header
             source_label = _source_label_en(doc_type)
-            answer_parts.append(f"\n{'='*70}")
-            answer_parts.append(f"\n📖 Example {examples_rendered} ({source_label}: {ticket_id})")
-            answer_parts.append(f"\n{'='*70}")
-            answer_parts.append(f"\n**Issue:** {short_desc}\n")
+            answer_parts.append(f"\n**Example {examples_rendered} - {source_label}: {ticket_id}**\n")
+            answer_parts.append(f"- **Issue:** {short_desc}\n")
             
-            # Format resolution with better structure
             formatted_resolution = _format_resolution_text(resolution, doc_type)
-            answer_parts.append(f"\n**Resolution Applied:**\n{formatted_resolution}\n")
+            answer_parts.append(f"- **Resolution Applied:**\n{formatted_resolution}\n")
     
-    # Add advisory conclusion
-    answer_parts.append("\n" + "="*70)
-    answer_parts.append("\n💡 **Recommendations:**")
-    answer_parts.append("\n" + "="*70)
-    answer_parts.append(
-        "\nBased on these examples:"
-    )
-    answer_parts.append(
-        "\n✓ You can try these steps yourself, OR"
-    )
-    answer_parts.append(
-        "\n✓ Request the IT support team to apply these solutions."
-    )
+    answer_parts.append("\n**When to escalate to IT:**\n")
+    answer_parts.append("- If the issue continues after these checks, include the error code, time, screenshot, and affected user details.\n")
+    answer_parts.append("- You can reference similar past steps when asking IT support to verify or apply the fix.\n")
     
     if len(docs) > examples_rendered:
         answer_parts.append(
@@ -900,8 +1716,8 @@ class RAGPipeline:
                    language=language,
                    session_id=session_id)
         
-        # Auto-detect language if not provided
-        if language is None:
+        # Auto-detect language if not provided or if an unsupported value is supplied.
+        if language not in {"tr", "en"}:
             language = self._detect_language(question)
         
         # Step 0.5: Handle thank you messages and acknowledgments
@@ -999,6 +1815,7 @@ class RAGPipeline:
             )
         
         # Step 1: Retrieve relevant documents
+        contextual_question = _build_contextual_question(question, conversation_history)
         retrieval_question = _build_contextual_retrieval_query(question, conversation_history)
         retrieved_docs = self.retriever.search(retrieval_question, top_k=top_k)
         
@@ -1053,11 +1870,36 @@ class RAGPipeline:
                 retrieved_docs=retrieved_docs
             )
         
-        # Step 4: Generate answer using real LLM or stub (PHASE 8)
+        # Step 4: Generate answer using direct KB evidence, real LLM, or stub (PHASE 8)
+        answer_docs = retrieved_docs
+        used_direct_kb_answer = False
         try:
-            if self.use_real_llm and self.openai_api_key:
+            source_grounded_kb_required = _requires_source_grounded_kb_answer(contextual_question)
+            direct_kb_docs = _direct_kb_docs_for_question(contextual_question, retrieved_docs)
+
+            if source_grounded_kb_required:
+                direct_segments = _extract_relevant_kb_segments(contextual_question, direct_kb_docs) if direct_kb_docs else []
+                if not direct_segments:
+                    logger.info("direct_kb_answer_rejected_no_evidence",
+                                question=contextual_question[:100],
+                                kb_doc_count=len(direct_kb_docs))
+                    return self._build_no_answer_result(
+                        language=language,
+                        reason="no_direct_kb_evidence",
+                        retrieved_docs=retrieved_docs,
+                        confidence=0.0,
+                        debug_info=debug_info
+                    )
+
+                answer_docs = _docs_for_direct_segments(direct_kb_docs, direct_segments)
+                used_direct_kb_answer = True
+                if language == "tr":
+                    generated_answer = _build_direct_kb_answer_tr(contextual_question, direct_kb_docs)
+                else:
+                    generated_answer = _build_direct_kb_answer_en(contextual_question, direct_kb_docs)
+            elif self.use_real_llm and self.openai_api_key:
                 generated_answer = generate_answer_with_llm(
-                    question=question,
+                    question=contextual_question,
                     docs=retrieved_docs,
                     language=language,
                     conversation_history=conversation_history or [],  # PHASE 9
@@ -1068,7 +1910,7 @@ class RAGPipeline:
                 )
             else:
                 generated_answer = generate_answer_with_stub(
-                    question=question,
+                    question=contextual_question,
                     docs=retrieved_docs,
                     language=language
                 )
@@ -1080,17 +1922,22 @@ class RAGPipeline:
             )
         
         # Step 5: Estimate confidence using the confidence estimator
+        answer_retrieval_scores = [doc.get("score", 0.0) for doc in answer_docs]
         confidence, has_sufficient_confidence = self.confidence_estimator.estimate_confidence(
             answer=generated_answer,
-            query=question,
-            retrieved_docs=retrieved_docs,
-            retrieval_scores=retrieval_scores
+            query=contextual_question,
+            retrieved_docs=answer_docs,
+            retrieval_scores=answer_retrieval_scores
         )
         
         # Step 5.5: Adjust confidence threshold for conversation history
         # If this is a follow-up question in an IT-related conversation,
         # use a lower threshold to allow more lenient answers
         effective_threshold = self.confidence_threshold
+        if used_direct_kb_answer:
+            # Direct KB answers copy source sentences verbatim, so a lower retrieval
+            # score can still be acceptable when there is explicit evidence.
+            effective_threshold = min(effective_threshold, 0.45)
         if conversation_history:
             # Check if conversation has IT context (already checked earlier)
             has_it_context = False
@@ -1126,7 +1973,7 @@ class RAGPipeline:
             )
         
         # Step 7: Build successful result
-        sources = self._extract_sources(retrieved_docs)
+        sources = self._extract_sources(answer_docs)
         
         result = RAGResult(
             answer=generated_answer,
@@ -1135,7 +1982,7 @@ class RAGPipeline:
             has_answer=True,
             language=language,
             intent=None,  # Can be populated by NLP module if needed
-            retrieved_docs=retrieved_docs,
+            retrieved_docs=answer_docs if used_direct_kb_answer else retrieved_docs,
             debug_info=debug_info  # Include debug info
         )
         
@@ -1227,13 +2074,24 @@ class RAGPipeline:
             List of source dictionaries with essential fields
         """
         sources = []
+        seen_sources: set[tuple[str, str]] = set()
         for doc in docs:
+            doc_id = doc.get("ticket_id") or doc.get("id") or doc.get("doc_id", "unknown")
+            title = doc.get("short_description", doc.get("title", ""))[:100]
+            dedupe_id = _doc_document_id(doc) or str(doc_id)
+            if "_chunk_" in dedupe_id:
+                dedupe_id = dedupe_id.split("_chunk_", 1)[0]
+            source_key = (dedupe_id, str(title))
+            if source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
+
             source = {
-                "doc_id": doc.get("ticket_id") or doc.get("id") or doc.get("doc_id", "unknown"),
+                "doc_id": doc_id,
                 "doc_type": doc.get("doc_type", "ticket"),
-                "title": doc.get("short_description", doc.get("title", ""))[:100],
+                "title": title,
                 "snippet": doc.get("description", doc.get("text", ""))[:200],
-                "relevance_score": float(doc.get("score", 0.0))
+                "relevance_score": min(1.0, max(0.0, float(doc.get("score", 0.0))))
             }
             sources.append(source)
         

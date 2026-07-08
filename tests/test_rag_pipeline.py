@@ -4,7 +4,14 @@ Tests for RAG pipeline (PHASE 4).
 
 import pytest
 from datetime import datetime
-from core.rag.pipeline import RAGPipeline, RAGResult, generate_answer_with_stub
+from core.rag.pipeline import (
+    RAGPipeline,
+    RAGResult,
+    _build_contextual_retrieval_query,
+    _extract_relevant_kb_segments,
+    _requires_source_grounded_kb_answer,
+    generate_answer_with_stub,
+)
 from core.retrieval.bm25_retriever import BM25Retriever
 from core.retrieval.embedding_retriever import EmbeddingRetriever
 from core.retrieval.hybrid_retriever import HybridRetriever
@@ -55,6 +62,263 @@ class TestLLMStub:
         
         assert "TCK-001" in answer
         assert "similar" in answer.lower()
+
+    def test_factual_kb_question_uses_kb_sentence_after_ticket(self):
+        """Factual document questions should use KB text even if a ticket ranks first."""
+        docs = [
+            {
+                "ticket_id": "TCK-999",
+                "doc_type": "ticket",
+                "short_description": "Ekli dosya gönderilemiyor",
+                "resolution": "Kullanıcıya dosya boyutu kontrolü önerildi.",
+                "score": 0.9,
+            },
+            {
+                "id": "ozdilek_kb_test_chunk_001",
+                "doc_id": "ozdilek_kb_test_chunk_001",
+                "doc_type": "kb",
+                "title": "BT Stratejisi",
+                "content": "2.2.4. Mobil yazıcılardan Lukhan Sewoo LK P12 ve üstü mobil yazıcılar kullanılır.",
+                "score": 0.4,
+            },
+        ]
+
+        answer = generate_answer_with_stub("mobil yazıcılardan hangisi kullanılıyor", docs, language="tr")
+
+        assert "Lukhan Sewoo LK P12" in answer
+        assert "Kaynakta geçen bilgiye göre" in answer
+        assert "Adım" not in answer
+
+    def test_product_question_does_not_invent_missing_product_name(self):
+        """Product lookup questions should not fabricate vendor/product names."""
+        docs = [
+            {
+                "id": "ozdilek_kb_antivirus_chunk_001",
+                "doc_id": "ozdilek_kb_antivirus_chunk_001",
+                "doc_type": "kb",
+                "title": "BT Antivirüs Talimatı",
+                "content": "Antivirüs uygulaması güncellemeleri sunucu üzerinde yapılır ve kullanıcı bilgisayarlarındaki uygulamalar otomatik güncellenir.",
+                "score": 0.8,
+            },
+        ]
+
+        answer = generate_answer_with_stub("antivirüs antispam için hangi ürünler kullanılıyor", docs, language="tr")
+
+        assert "açık bir ürün/model adı bulunamadı" in answer
+        assert "Symantec" not in answer
+        assert "McAfee" not in answer
+        assert "Barracuda" not in answer
+
+    def test_kb_answer_cleans_pdf_header_metadata(self):
+        """Direct KB answers should show the relevant instruction, not PDF header metadata."""
+        docs = [
+            {
+                "id": "ozdilek_kb_mail_chunk_001",
+                "doc_id": "ozdilek_kb_mail_chunk_001",
+                "doc_type": "kb",
+                "title": "BT Elektronik Posta Talimatı",
+                "content": (
+                    "DOKÜMAN ONAY MERCİ: Bilgi Teknolojileri ve ARGE Direktörü "
+                    "DOKÜMAN KODU: HLD.T.GNL.005 REVİZYON SAYISI: 22 [Page 2] "
+                    "7.Alınan önemsiz elektronik posta (spam) mesajı hiçbir şekilde yanıtlanmamalıdır."
+                ),
+                "score": 0.8,
+            },
+        ]
+
+        answer = generate_answer_with_stub(
+            "spam mesajı geldiğinde ne yapılması öneriliyor",
+            docs,
+            language="tr"
+        )
+
+        assert "Alınan önemsiz elektronik posta" in answer
+        assert "DOKÜMAN ONAY MERCİ" not in answer
+
+    def test_action_plan_question_uses_labeled_form_fields(self):
+        """Action plan forms should return labeled source fields, not random date rows."""
+        docs = [
+            {
+                "id": "ozdilek_kb_action_plan_chunk_001",
+                "doc_id": "ozdilek_kb_action_plan_chunk_001",
+                "doc_type": "kb",
+                "title": "Enerji Yönetimi Aksiyon Planı",
+                "content": (
+                    "Enerji Yönetimi Aksiyon Planı "
+                    "Proje Amacı/Hedefi: GKM odasında bulunan ekran ve BT sistemlerinin soğutma ihtiyacı için iki klima bulunmaktadır. "
+                    "Proje Başlangıç Tarihi: 01.10.2019 "
+                    "Proje Tanımı: GKM odası ekran ve BT sistemlerinin olduğu bölüme cam bölme yapılması. "
+                    "Proje Planlama Aksiyonları: Cam bölmelerin merkez şubeden alınması. Salon tipi klimanın sökülmesi. "
+                    "Proje Sonuçlarının Doğrulanması: Klima saatlik elektrik tüketimi 8,6 kW değerinden 4,3 kW değerine düşmüştür. "
+                    "Sonuçların Değerlendirmesi: GKM odası toplam 35 m2'dir. Cam bölme ile soğutulacak bölüm 11 m2'ye düşürülmüştür."
+                ),
+                "score": 0.9,
+            },
+        ]
+
+        answer = generate_answer_with_stub("enerji yönetimi aksiyon planından bahseder misin", docs, language="tr")
+
+        assert "Proje amacı/hedefi" in answer
+        assert "Proje tanımı" in answer
+        assert "Aksiyonlar" in answer
+        assert "Proje sonuçlarının doğrulanması" in answer
+        assert "8,6 kW" in answer
+        assert "4,3 kW" in answer
+        assert "Sonuçların değerlendirmesi" in answer
+        assert "11 m2" in answer
+
+    def test_erp_question_uses_sap_kb_sources(self):
+        """ERP questions should surface SAP-related Özdilek KB documents."""
+        docs = [
+            {
+                "id": "ozdilek_kb_sap_hana_chunk_001",
+                "doc_id": "ozdilek_kb_sap_hana_chunk_001",
+                "doc_type": "kb",
+                "title": "DST.T.BT.013_3 BT SAP HANA İŞ SÜREKLİLİĞİ SENARYOSU",
+                "content": (
+                    "Bu prosedürde SAP HANA sisteminde beklenmedik durumlara karşı "
+                    "Bilgi Teknolojileri ve Ar-Ge Direktörlüğü tarafından yürütülecek faaliyetler tanımlanır."
+                ),
+                "score": 0.8,
+            },
+        ]
+
+        answer = generate_answer_with_stub("özdilek holdingte ERP sistemi olarak ne kullanılıyor", docs, language="tr")
+
+        assert "SAP" in answer
+        assert "HANA" in answer
+        assert "ERP/SAP sistemi olarak SAP" in answer
+
+    def test_director_responsibility_question_uses_role_block(self):
+        """Director role questions should prefer role/responsibility blocks."""
+        docs = [
+            {
+                "id": "ozdilek_kb_noise_chunk_001",
+                "doc_id": "ozdilek_kb_noise_chunk_001",
+                "doc_type": "kb",
+                "title": "Özveri Ar-Ge Merkezi Proje Seçim Kriter Prosedürü",
+                "content": "Genel Müdürü Bilgi Teknolojileri ve Ar-Ge Direktörü Eğitim ve İnsan Kaynakları Müdürü.",
+                "score": 0.9,
+            },
+            {
+                "id": "ozdilek_kb_strategy_chunk_004",
+                "doc_id": "ozdilek_kb_strategy_chunk_004",
+                "doc_type": "kb",
+                "title": "DST.P.GNL.001_5 BT STRATEJİLERİNİN OLUŞTURULMASI YÖNERGESİ",
+                "content": (
+                    "4. SORUMLULAR Rol Sorumluluk Bilgi Teknolojileri ve Ar-Ge Direktörü "
+                    "•BT yönlendirme komitesi toplantılarının gündemini belirler ve toplantıyı organize eder. "
+                    "•BT Stratejik Planı’nı oluşturur, takip eder ve gerekli durumlarda güncellenmesini sağlar. "
+                    "•BT stratejilerine uygun bir şekilde BT hizmetlerinin verilmesini sağlar. "
+                    "İç Denetim Müdürü •BT Yönlendirme Komitesi çalışmalarını denetler."
+                ),
+                "score": 0.7,
+            },
+        ]
+
+        answer = generate_answer_with_stub(
+            "Bilgi Teknolojileri ve Ar-Ge Direktörü nün görevlerinden bahseder misin ama özdilekteki",
+            docs,
+            language="tr",
+        )
+
+        assert "BT yönlendirme komitesi toplantılarının gündemini belirler" in answer
+        assert "BT Stratejik Planı" in answer
+        assert "Proje Seçim" not in answer
+
+    def test_followup_correction_uses_previous_ozdilek_question(self):
+        """Correction-style follow-ups should carry the previous factual question."""
+        history = [
+            {
+                "role": "user",
+                "content": (
+                    "özdilekte Dizüstü ve masaüstü bilgisayar ve aksamları cihaz "
+                    "bakımlarını yaptırmak kimin sorumluluğunda ve ne kadar sürede yapılması gerekiyor"
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": "Kaynakta geçen bilgiye göre bakım tablosu incelendi.",
+            },
+        ]
+
+        contextual_query = _build_contextual_retrieval_query(
+            "Dizüstü ve masaüstü bilgisayar ve aksamları bunu sordum ben sadece",
+            history,
+        )
+
+        assert "özdilekte Dizüstü ve masaüstü bilgisayar" in contextual_query
+        assert "Takip sorusu/duzeltme" in contextual_query
+        assert _requires_source_grounded_kb_answer(contextual_query) is True
+
+    def test_desktop_laptop_maintenance_answer_extracts_single_table_row(self):
+        """Maintenance table lookups should not return the whole device table."""
+        docs = [
+            {
+                "id": "ozdilek_kb_maintenance_chunk_001",
+                "doc_id": "ozdilek_kb_maintenance_chunk_001",
+                "doc_type": "kb",
+                "title": "HLD.T.GNL.015_3 BT DONANIMLARI BAKIM DESTEK TALİMATI",
+                "content": (
+                    "Planlı bakım bir önceki bakım tarihine göre aşağıdaki tabloya göre yapılacaktır: "
+                    "Cihaz Adı Sorumlu Bakımı Yapan Bakım Aralığı (Yılda) "
+                    "Dizüstü ve masaüstü bilgisayar ve aksamları BT Müdürlüğü İç Kaynaklar 1 "
+                    "Tüm yazıcılar BT Müdürlüğü İç Kaynaklar 1 "
+                    "Plotterlar BT Müdürlüğü Dış Kaynaklar 1"
+                ),
+                "score": 0.9,
+            }
+        ]
+
+        question = (
+            "özdilekte Dizüstü ve masaüstü bilgisayar ve aksamları cihaz "
+            "bakımlarını yaptırmak kimin sorumluluğunda ve ne kadar sürede yapılması gerekiyor"
+        )
+
+        segments = _extract_relevant_kb_segments(question, docs)
+        answer = generate_answer_with_stub(question, docs, language="tr")
+
+        assert len(segments) == 1
+        assert "Dizüstü ve masaüstü bilgisayar ve aksamları" in segments[0]["segment"]
+        assert "BT Müdürlüğü" in segments[0]["segment"]
+        assert "İç Kaynaklar" in segments[0]["segment"]
+        assert "yılda 1" in segments[0]["segment"]
+        assert "Tüm yazıcılar" not in answer
+        assert "Plotterlar" not in answer
+
+    def test_laptop_performance_answer_contains_expected_actions(self):
+        """Slow laptop answers should contain concrete performance troubleshooting terms."""
+        docs = [
+            {
+                "ticket_id": "TCK-LAPTOP",
+                "doc_type": "ticket",
+                "short_description": "Laptop çok yavaş çalışıyor",
+                "resolution": "Disk temizliği yapıldı, bellek kullanımı kontrol edildi ve güncellemeler tamamlandı.",
+                "score": 0.9,
+            }
+        ]
+
+        answer = generate_answer_with_stub("Laptop çok yavaş çalışıyor, ne yapmalıyım?", docs, language="tr")
+
+        for keyword in ("performans", "disk", "bellek", "güncelleme", "temizlik"):
+            assert keyword in answer.lower()
+
+    def test_disk_full_answer_contains_expected_actions(self):
+        """Disk-full answers should mention cleanup, files, and deletion/space checks."""
+        docs = [
+            {
+                "ticket_id": "TCK-DISK",
+                "doc_type": "ticket",
+                "short_description": "Disk alanı doldu hatası",
+                "resolution": "Geçici dosyalar temizlendi ve büyük dosyalar arşivlendi.",
+                "score": 0.9,
+            }
+        ]
+
+        answer = generate_answer_with_stub("Disk alanı doldu hatası alıyorum", docs, language="tr")
+
+        for keyword in ("disk", "alan", "temizlik", "dosya", "silme"):
+            assert keyword in answer.lower()
 
 
 class TestRAGPipelineNoAnswer:
@@ -191,6 +455,12 @@ class TestRAGPipelineWithAnswer:
         
         # Should detect as English (no Turkish chars)
         assert result.language == "en"
+
+    def test_invalid_language_falls_back_to_detection(self, pipeline_with_data):
+        """Unsupported language values should not leak into the API response."""
+        result = pipeline_with_data.answer("Outlook şifre problemi", language="invalid")
+
+        assert result.language in {"tr", "en"}
     
     def test_multiple_relevant_tickets(self, pipeline_with_data):
         """Test handling of multiple relevant results."""
@@ -391,6 +661,27 @@ class TestAdvisoryAnswerGeneration:
         # Should have advisory conclusion
         assert ("deneyebilirsiniz" in answer or "talep edebilirsiniz" in answer), \
             "Should suggest user can try or request these solutions"
+
+    def test_advisory_answer_has_clean_step_format(self):
+        """Support answers should combine recommended steps with past-ticket evidence cleanly."""
+        docs = [
+            {
+                "ticket_id": "TCK-009",
+                "short_description": "VPN bağlanamıyor",
+                "resolution": "VPN profili kontrol edildi ve gateway bilgisi güncellendi."
+            }
+        ]
+
+        answer = generate_answer_with_stub(
+            "VPN'e bağlanamıyorum ne yapmam gerek",
+            docs,
+            language="tr"
+        )
+
+        assert "Sizin deneyebileceğiniz adımlar" in answer
+        assert "Geçmiş benzer kayıtlarda incelenenler" in answer
+        assert "Uygulanan Çözüm" in answer
+        assert "====" not in answer
     
     def test_advisory_language_english(self):
         """Test that English answers also use advisory language."""

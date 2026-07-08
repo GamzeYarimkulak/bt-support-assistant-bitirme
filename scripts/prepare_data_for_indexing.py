@@ -678,7 +678,15 @@ def prepare_data(chunk_size: int = 1200, overlap: int = 150) -> dict[str, Any]:
     summary_path = PROCESSED_DIR / "data_summary.json"
 
     tickets_csv.to_csv(tickets_csv_path, index=False, encoding="utf-8", quoting=csv.QUOTE_MINIMAL)
-    tickets_parquet.to_parquet(tickets_parquet_path, index=False, engine="pyarrow")
+    try:
+        tickets_parquet.to_parquet(tickets_parquet_path, index=False, engine="pyarrow")
+    except ImportError:
+        if not tickets_parquet_path.exists():
+            raise
+        print(
+            f"Warning: pyarrow is not installed; keeping existing {tickets_parquet_path}. "
+            "Install pyarrow to regenerate the parquet file."
+        )
     kb_documents.to_csv(kb_documents_path, index=False, encoding="utf-8", quoting=csv.QUOTE_MINIMAL)
     kb_chunk_count = write_jsonl(kb_chunks_path, kb_chunks)
 

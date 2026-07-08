@@ -1,0 +1,91 @@
+{
+  "generated_at": "2026-06-19T00:00:00+03:00",
+  "scope": "Final audited summary for the BT Support Assistant prototype",
+  "data": {
+    "raw_ticket_rows_seen": 80350,
+    "processed_tickets": 34840,
+    "kb_documents": 135,
+    "kb_chunks": 135,
+    "removed_out_of_scope_rows": 41859,
+    "removed_duplicate_external_rows": 3651,
+    "limitation": "The project uses synthetic, converted, and open-source-supported test data. It does not contain Ozdilek operational data."
+  },
+  "index": {
+    "indexed_documents": 34975,
+    "indexed_tickets": 34840,
+    "indexed_kb_documents": 135,
+    "limit_used": false,
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "embedding_dim": 384
+  },
+  "retrieval_evaluation": {
+    "query_count": 180,
+    "ticket_specific_query_count": 100,
+    "general_category_subcategory_query_count": 80,
+    "successful_queries": 180,
+    "error_count": 0,
+    "mixed_query_results": {
+      "recall_at_5": 0.85,
+      "recall_at_10": 0.9111111111111111,
+      "precision_at_5": 0.24222222222222223,
+      "ndcg_at_10": 0.7565958591120396
+    },
+    "general_category_subcategory_results": {
+      "recall_at_5": 0.6875,
+      "recall_at_10": 0.8,
+      "precision_at_5": 0.3,
+      "ndcg_at_10": 0.5518977162091645,
+      "category_hit_at_5": 0.9125,
+      "subcategory_hit_at_5": 0.6875
+    },
+    "ticket_specific_results": {
+      "exact_recall_at_5": 0.98,
+      "exact_recall_at_10": 1.0,
+      "exact_precision_at_5": 0.196,
+      "exact_ndcg_at_10": 0.92035437343434,
+      "validity_note": "The queries were derived from the target ticket text and the target ticket remained in the candidate index. These values measure same-record retrieval and are not independent generalization results."
+    },
+    "precision_note": "Each ticket-specific query has one relevant document, so Precision@5 is structurally bounded by 0.20 for this group.",
+    "primary_interpretation": "The general category/subcategory results are the more conservative estimate for ordinary user queries.",
+    "source_file": "data/evaluation/retrieval/retrieval_metrics.json"
+  },
+  "anomaly_validation": {
+    "generated_dataset_days": 190,
+    "analysis_windows": 182,
+    "baseline_days": 30,
+    "evaluated_days": 152,
+    "positive_days": 39,
+    "negative_days": 113,
+    "validation_tickets": 3160,
+    "tickets_with_embeddings": 3160,
+    "ground_truth_events": 39,
+    "detected_events": 43,
+    "matched_events": 37,
+    "false_positive_candidates": 6,
+    "false_negative_events": 2,
+    "precision": 0.8604651162790697,
+    "recall": 0.9487179487179487,
+    "f1": 0.9024390243902439,
+    "specificity": 0.9469026548672567,
+    "detection_threshold": 0.3,
+    "warning_threshold": 0.55,
+    "critical_threshold": 0.65,
+    "validity_note": "The synthetic generator injects volume, category, and semantic patterns that correspond to the detector signals. The metrics measure controlled-pattern detectability and must not be interpreted as production-field performance.",
+    "source_file": "data/evaluation/anomaly/anomaly_validation_metrics.json"
+  },
+  "response_generation_evaluation": {
+    "source_grounding_policy": "No source, no answer",
+    "faithfulness_independently_measured": false,
+    "hallucination_rate_independently_measured": false,
+    "expert_correctness_independently_measured": false,
+    "context_sufficiency_note": "The displayed score is a retrieval-oriented heuristic, not a calibrated probability that the generated answer is correct."
+  },
+  "tests": {
+    "passed": 109,
+    "skipped": 9,
+    "warnings": 3,
+    "skipped_note": "The skipped cases are server-dependent chat scenario tests.",
+    "warning_note": "The warnings are Pydantic deprecation warnings.",
+    "command": "python -m pytest"
+  }
+}

@@ -1,0 +1,23 @@
+# Optional source-column mapping for ticket exports.
+# If a source file already uses standard field names, this file is not needed.
+
+column_mapping:
+  ticket_id: "ticket_id"
+  created_at: "created_at"
+  updated_at: "updated_at"
+  closed_at: "closed_at"
+  status: "status"
+  category: "category"
+  subcategory: "subcategory"
+  priority: "priority"
+  severity: "severity"
+  affected_service: "affected_service"
+  assignment_group: "assignment_group"
+  channel: "channel"
+  location_type: "location_type"
+  short_description: "short_description"
+  description: "description"
+  resolution_code: "resolution_code"
+  action_taken: "action_taken"
+  root_cause: "root_cause"
+  resolution_status: "resolution_status"

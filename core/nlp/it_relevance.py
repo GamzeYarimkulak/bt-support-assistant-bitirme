@@ -11,22 +11,25 @@ logger = structlog.get_logger()
 # IT-related keywords (Turkish and English)
 IT_KEYWORDS = [
     # Hardware
-    'bilgisayar', 'computer', 'laptop', 'yazıcı', 'printer', 'monitör', 'monitor', 
-    'klavye', 'keyboard', 'mouse', 'fare', 'telefon', 'phone', 'tablet',
+    'bilgisayar', 'computer', 'laptop', 'yazıcı', 'yazıcılar', 'yazıcılardan',
+    'mobil yazıcı', 'printer', 'monitör', 'monitor', 'terminal', 'terminaller',
+    'el terminali', 'klavye', 'keyboard', 'mouse', 'fare', 'telefon', 'phone', 'tablet',
     'donanım', 'hardware', 'disk', 'ram', 'bellek', 'memory', 'ekran', 'screen',
     'şarj', 'charge', 'charger', 'batarya', 'battery', 'power', 'güç',
     
     # Software/Applications
     'yazılım', 'software', 'program', 'uygulama', 'app', 'outlook', 'excel', 'word',
-    'teams', 'office', 'windows', 'linux', 'macos', 'sistem', 'system',
+    'teams', 'office', 'windows', 'linux', 'macos', 'sistem', 'sistemi', 'system',
+    'bt', 'bilgi teknolojileri', 'sap', 'hana', 'erp', 'fiori', 'ecr', 'pos',
     
     # Network/Internet
     'ağ', 'network', 'internet', 'wifi', 'wi-fi', 'vpn', 'bağlantı', 'connection',
-    'ip', 'dns', 'sunucu', 'server', 'email', 'e-posta', 'mail',
+    'ip', 'dns', 'sunucu', 'server', 'email', 'e-posta', 'mail', 'switch', 'log',
     
     # Security/Authentication
     'şifre', 'password', 'güvenlik', 'security', 'kimlik', 'authentication', 'login',
-    'giriş', 'mfa', '2fa', 'çok faktörlü', 'multi-factor',
+    'giriş', 'mfa', '2fa', 'çok faktörlü', 'multi-factor', 'antivirüs',
+    'antivirus', 'antispam', 'anti-spam', 'spam',
     
     # IT Support Terms
     'hata', 'error', 'sorun', 'problem', 'bug', 'çözüm', 'solution', 'destek', 'support',
@@ -38,7 +41,14 @@ IT_KEYWORDS = [
     # Technical Terms
     'sürücü', 'driver', 'güncelleme', 'update', 'yükleme', 'install', 'kurulum',
     'ayar', 'setting', 'yapılandırma', 'configuration', 'backup', 'yedekleme',
+    'yedek', 'felaket', 'senaryo', 'surekliligi', 'sürekliliği', 'prosedür',
+    'procedure', 'talimat', 'instruction', 'doküman', 'document',
     'aygıt', 'device', 'yöneticisi', 'manager', 'administrator',
+
+    # Ozdilek knowledge-base / corporate IT document terms
+    'özdilek', 'ozdilek', 'aksiyon planı', 'aksiyon plani', 'enerji yönetimi',
+    'enerji yonetimi', 'sistem odası', 'sistem odasi', 'gkm', 'cam bölme',
+    'cam bolme',
 ]
 
 # Non-IT keywords that should be rejected (only if no IT keywords present)
@@ -48,6 +58,7 @@ NON_IT_KEYWORDS = [
     'yemek', 'food', 'içecek', 'drink', 'su', 'water',
     'ev', 'home', 'araba', 'car', 'yol', 'road',
     'sağlık', 'health', 'ilaç', 'medicine', 'doktor', 'doctor',
+    'hava', 'hava durumu', 'weather', 'forecast', 'meteoroloji',
     'hap', 'pill', 'tablet ilaç',  # Medicine-related
 ]
 

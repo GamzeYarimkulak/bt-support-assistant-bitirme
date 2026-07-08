@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BT Support Ticket Export Schema",
+  "type": "object",
+  "required": [
+    "ticket_id",
+    "created_at"
+  ],
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "Unique ticket identifier. A pseudonymous ID is acceptable."
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Ticket creation timestamp."
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "closed_at": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "subcategory": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string"
+    },
+    "affected_service": {
+      "type": "string",
+      "description": "Service or system affected by the ticket, such as VPN, Exchange, SAP, ERP, MFA, network, printer."
+    },
+    "assignment_group": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "location_type": {
+      "type": "string",
+      "description": "Anonymized location type, such as store, warehouse, head_office."
+    },
+    "short_description": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "resolution_code": {
+      "type": "string",
+      "description": "Short closure code such as VPN_PROFILE_RESET or MFA_REENROLL."
+    },
+    "action_taken": {
+      "type": "string",
+      "description": "Short statement of what IT staff did."
+    },
+    "root_cause": {
+      "type": "string"
+    },
+    "resolution_status": {
+      "type": "string"
+    },
+    "source_system": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

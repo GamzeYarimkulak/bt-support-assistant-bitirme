@@ -31,11 +31,21 @@ _conversation_memory: Dict[str, List[Dict[str, Any]]] = {}
 MAX_MEMORY_MESSAGES = 10  # Last 5 user + 5 assistant messages (5 pairs)
 
 
+class ChatMessage(BaseModel):
+    """Conversation message supplied by the browser for context recovery."""
+    role: str = Field(..., description="Message role: user or assistant")
+    content: str = Field(..., min_length=1, max_length=4000, description="Message content")
+
+
 class ChatRequest(BaseModel):
     """User chat request model."""
     query: str = Field(..., min_length=1, max_length=1000, description="User question")
     session_id: Optional[str] = Field(None, description="Optional session ID for context")
     language: Optional[str] = Field(None, description="Query language (auto-detected if not provided)")
+    messages: Optional[List[ChatMessage]] = Field(
+        None,
+        description="Optional recent conversation history from the browser"
+    )
 
 
 class Source(BaseModel):
@@ -79,6 +89,27 @@ def get_conversation_history(session_id: str) -> List[Dict[str, Any]]:
         List of messages (oldest to newest)
     """
     return _conversation_memory.get(session_id, [])
+
+
+def normalize_request_history(messages: Optional[List[ChatMessage]]) -> List[Dict[str, Any]]:
+    """Convert browser-supplied messages into the internal memory format."""
+    normalized: List[Dict[str, Any]] = []
+    for message in messages or []:
+        role = message.role.strip().lower()
+        content = message.content.strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        normalized.append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        })
+    return normalized[-MAX_MEMORY_MESSAGES:]
+
+
+def replace_conversation_history(session_id: str, messages: List[Dict[str, Any]]) -> None:
+    """Replace server memory with a trusted recent browser history snapshot."""
+    _conversation_memory[session_id] = messages[-MAX_MEMORY_MESSAGES:]
 
 
 def add_to_conversation_history(session_id: str, role: str, content: str) -> None:
@@ -325,14 +356,20 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # Get RAG pipeline (initializes if needed)
         pipeline = get_rag_pipeline()
         
-        # Get conversation history if session_id provided
+        # Get conversation history if session_id provided. Prefer the browser
+        # snapshot when available so context survives page reloads/server restarts.
         conversation_history = []
-        if request.session_id:
+        request_history = normalize_request_history(request.messages)
+        if request_history:
+            conversation_history = request_history
+        elif request.session_id:
             conversation_history = get_conversation_history(request.session_id)
+        if request.session_id:
             try:
                 logger.info("conversation_history_loaded",
                            session_id=request.session_id,
-                           history_length=len(conversation_history))
+                           history_length=len(conversation_history),
+                           source="browser" if request_history else "server")
             except (OSError, UnicodeError):
                 pass
         
@@ -389,6 +426,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         
         # Save conversation to memory (PHASE 9: Conversation tracking)
         if request.session_id:
+            if request_history:
+                replace_conversation_history(request.session_id, request_history)
             add_to_conversation_history(request.session_id, "user", request.query)
             add_to_conversation_history(request.session_id, "assistant", rag_result.answer)
         

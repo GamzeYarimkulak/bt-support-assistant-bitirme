@@ -53,6 +53,9 @@ data/
 *.json
 *.jsonl
 *.parquet
+!reports/final_metrics_summary.json
+!integrations/ticket_collector/schema.json
+!integrations/ticket_collector/sample_ticket_template.csv
 
 # Indexes
 indexes/
@@ -67,6 +70,8 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+.tmp/
+tmp/
 
 # Jupyter
 .ipynb_checkpoints/

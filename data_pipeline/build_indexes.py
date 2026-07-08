@@ -510,7 +510,18 @@ def load_processed_tickets_from_parquet(parquet_path: str) -> List[Dict[str, Any
     if not path.exists():
         raise FileNotFoundError(f"Processed tickets parquet not found: {parquet_path}")
 
-    df = pd.read_parquet(path)
+    try:
+        df = pd.read_parquet(path)
+    except ImportError:
+        csv_path = path.with_suffix(".csv")
+        if not csv_path.exists():
+            raise
+        logger.warning(
+            "processed_tickets_parquet_unavailable_using_csv",
+            parquet_path=str(path),
+            csv_path=str(csv_path),
+        )
+        df = pd.read_csv(csv_path)
     documents: List[Dict[str, Any]] = []
 
     for index, row in df.iterrows():

@@ -10,6 +10,9 @@ const API_ENDPOINTS = {
 let chatMessages = [];
 let sessionId = null;
 let qualityLoaded = false;
+const CHAT_HISTORY_STORAGE_KEY = 'bt_support_chat_messages';
+const MAX_STORED_CHAT_MESSAGES = 20;
+const MAX_CONTEXT_MESSAGES = 10;
 
 function getOrCreateSessionId() {
     if (sessionId) {
@@ -23,6 +26,40 @@ function getOrCreateSessionId() {
     }
 
     return sessionId;
+}
+
+function loadStoredChatMessages() {
+    try {
+        const storedMessages = JSON.parse(localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || '[]');
+        if (!Array.isArray(storedMessages)) {
+            chatMessages = [];
+            return;
+        }
+
+        chatMessages = storedMessages
+            .filter(message => message && ['user', 'assistant'].includes(message.role) && message.text)
+            .slice(-MAX_STORED_CHAT_MESSAGES);
+    } catch (error) {
+        chatMessages = [];
+        localStorage.removeItem(CHAT_HISTORY_STORAGE_KEY);
+    }
+}
+
+function saveChatMessages() {
+    const messagesToStore = chatMessages
+        .filter(message => ['user', 'assistant'].includes(message.role))
+        .slice(-MAX_STORED_CHAT_MESSAGES);
+    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(messagesToStore));
+}
+
+function buildApiConversationHistory(messages) {
+    return messages
+        .filter(message => ['user', 'assistant'].includes(message.role) && message.text)
+        .slice(-MAX_CONTEXT_MESSAGES)
+        .map(message => ({
+            role: message.role,
+            content: String(message.text)
+        }));
 }
 
 function renderChatMessages() {
@@ -172,9 +209,84 @@ function renderDebugInfo(debugInfo) {
 }
 
 function formatAssistantMessage(text = '') {
-    return escapeHtml(text)
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>');
+    const lines = String(text || '').split(/\r?\n/);
+    const html = [];
+    let openList = null;
+
+    const closeList = () => {
+        if (openList) {
+            html.push(`</${openList}>`);
+            openList = null;
+        }
+    };
+
+    const openListIfNeeded = (type) => {
+        if (openList === type) {
+            return;
+        }
+        closeList();
+        const className = type === 'ol' ? 'answer-list answer-list-numbered' : 'answer-list';
+        html.push(`<${type} class="${className}">`);
+        openList = type;
+    };
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+
+        if (!line) {
+            closeList();
+            continue;
+        }
+
+        if (/^(Sorunuz|Your question):/i.test(line)) {
+            closeList();
+            html.push(`<div class="answer-question">${formatInline(line)}</div>`);
+            continue;
+        }
+
+        if (/^\*\*[^*]+:\*\*$/.test(line) || /^\*\*[^*]+\*\*$/.test(line)) {
+            closeList();
+            const title = line.replace(/^\*\*/, '').replace(/\*\*$/, '').replace(/:$/, '');
+            html.push(`<div class="answer-section-title">${formatInline(title)}</div>`);
+            continue;
+        }
+
+        const numberedMatch = line.match(/^(\d+)\.\s+(.+)$/);
+        if (numberedMatch) {
+            openListIfNeeded('ol');
+            html.push(`<li>${formatInline(numberedMatch[2])}</li>`);
+            continue;
+        }
+
+        const bulletMatch = line.match(/^[-•✓]\s+(.+)$/);
+        if (bulletMatch) {
+            openListIfNeeded('ul');
+            html.push(`<li>${formatInline(bulletMatch[1])}</li>`);
+            continue;
+        }
+
+        if (/^\((Toplam|Total)\s+/i.test(line)) {
+            closeList();
+            html.push(`<div class="answer-note">${formatInline(line)}</div>`);
+            continue;
+        }
+
+        if (/^(Kaynak|Kaynaklar|Source|Sources):/i.test(line)) {
+            closeList();
+            html.push(`<div class="answer-source-note">${formatInline(line)}</div>`);
+            continue;
+        }
+
+        closeList();
+        html.push(`<p class="answer-paragraph">${formatInline(line)}</p>`);
+    }
+
+    closeList();
+    return html.join('');
+}
+
+function formatInline(value = '') {
+    return escapeHtml(value).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 }
 
 function getConfidenceClass(confidence) {
@@ -297,11 +409,13 @@ async function submitChatQuery() {
     showLoading(true);
     queryInput.value = '';
 
+    const historyForRequest = buildApiConversationHistory(chatMessages);
     chatMessages.push({
         role: 'user',
         text: query,
         timestamp: Date.now()
     });
+    saveChatMessages();
     renderChatMessages();
 
     try {
@@ -314,7 +428,8 @@ async function submitChatQuery() {
             body: JSON.stringify({
                 query,
                 language,
-                session_id: getOrCreateSessionId()
+                session_id: getOrCreateSessionId(),
+                messages: historyForRequest
             })
         });
 
@@ -334,6 +449,7 @@ async function submitChatQuery() {
             sources: data.sources || [],
             debug_info: data.debug_info || null
         });
+        saveChatMessages();
         renderChatMessages();
     } catch (error) {
         chatMessages.push({
@@ -341,6 +457,7 @@ async function submitChatQuery() {
             text: `Bir hata oluştu: ${error.message}. Lütfen tekrar deneyin.`,
             timestamp: Date.now()
         });
+        saveChatMessages();
         renderChatMessages();
     } finally {
         submitBtn.disabled = false;
@@ -774,6 +891,7 @@ function hideAnomalyResult(section) {
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     getOrCreateSessionId();
+    loadStoredChatMessages();
     renderChatMessages();
 
     const chatSubmitBtn = document.getElementById('chat-submit-btn');

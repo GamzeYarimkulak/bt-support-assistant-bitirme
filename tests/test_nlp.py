@@ -5,6 +5,7 @@ Tests for NLP module (preprocessing and intent classification).
 import pytest
 from core.nlp.preprocessing import TextPreprocessor
 from core.nlp.intent import IntentClassifier, QueryIntent
+from core.nlp.it_relevance import ITRelevanceChecker
 
 
 class TestTextPreprocessor:
@@ -81,4 +82,25 @@ class TestIntentClassifier:
         assert isinstance(scores, dict)
         assert QueryIntent.HOW_TO.value in scores
         assert QueryIntent.TROUBLESHOOT.value in scores
+
+
+class TestITRelevanceChecker:
+    """Tests for IT relevance filtering."""
+
+    def test_weather_query_is_rejected(self):
+        checker = ITRelevanceChecker()
+
+        is_it, confidence = checker.is_it_related("yarın hava durumu nasıl")
+
+        assert is_it is False
+        assert confidence >= 0.8
+        assert checker.should_reject_query("yarın hava durumu nasıl") is True
+
+    def test_it_query_with_weather_word_can_still_pass(self):
+        checker = ITRelevanceChecker()
+
+        is_it, _ = checker.is_it_related("hava durumu uygulaması açılmıyor")
+
+        assert is_it is True
+        assert checker.should_reject_query("hava durumu uygulaması açılmıyor") is False
 
