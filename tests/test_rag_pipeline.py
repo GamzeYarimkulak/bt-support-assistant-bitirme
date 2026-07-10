@@ -254,6 +254,48 @@ class TestLLMStub:
         assert "Sonuçların değerlendirmesi" in answer
         assert "11 m2" in answer
 
+    def test_action_plan_table_lookup_returns_responsible_position(self):
+        """Action plan row lookups should return the matching table cell."""
+        docs = [
+            {
+                "id": "ozdilek_kb_action_plan_chunk_001",
+                "doc_id": "ozdilek_kb_action_plan_chunk_001",
+                "doc_type": "kb",
+                "title": "Enerji Yönetimi Aksiyon Planı",
+                "content": (
+                    "Enerji Yönetimi Aksiyon Planı "
+                    "Doküman: HLD.F.PRJ.124_0 ÖZDİLEKPARK BURSA NİLÜFER - GKM Sistem Odası ve BT Sistemlerinin Olduğu Bölüme Cam "
+                    "Proje Bütçesi ve Amortisman Süresi: 2.000 TL - 3 ay "
+                    "Proje Planlama Aksiyonları: Cam bölmelerin merkez şubeden alınması; "
+                    "cam bölme yapılacak bölümdeki tesisatların deplase edilmesi; "
+                    "salon tipi klimanın sökülmesi; cam bölmenin montajı; asma tavanın kapatılması. "
+                    "Detaylı Proje Planlama: "
+                    "- Cam bölmelerin merkez şubeden alınması. Sorumlu pozisyon: Taşeron Firma. Termin tarihi: 1 gün. "
+                    "- Cam bölme yapılacak bölümde bulunan tesisatların deplase edilmesi. Sorumlu pozisyon: Teknik Bakım. Termin tarihi: 1 gün. "
+                    "- Salon tipi klimanın sökülmesi. Sorumlu pozisyon: Yetkili Servis. Termin tarihi: 1 gün. "
+                    "- Cam bölmenin montajı. Sorumlu pozisyon: Taşeron Firma. Termin tarihi: 2 gün. "
+                    "- Asma tavanın kapatılması. Sorumlu pozisyon: Teknik bakım. Termin tarihi: 2 gün."
+                ),
+                "score": 0.9,
+            },
+        ]
+        question = (
+            "peki enerji aksiyon planında cam bölmelerin merkez şubeden "
+            "alınmasında sorumlu pozisyon kimdir"
+        )
+
+        segments = _extract_relevant_kb_segments(question, docs)
+        answer = generate_answer_with_stub(question, docs, language="tr")
+
+        assert len(segments) == 1
+        assert segments[0]["segment"].startswith("Cam bölmelerin merkez şubeden alınması")
+        assert "Cam bölmelerin merkez şubeden alınması" in segments[0]["segment"]
+        assert "sorumlu pozisyon Taşeron Firma" in segments[0]["segment"]
+        assert "Taşeron Firma" in answer
+        assert "Proje Bütçesi" not in answer
+        assert "Teknik Bakım" not in answer
+        assert "Yetkili Servis" not in answer
+
     def test_erp_question_uses_sap_kb_sources(self):
         """ERP questions should surface SAP-related Özdilek KB documents."""
         docs = [

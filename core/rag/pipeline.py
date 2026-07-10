@@ -862,6 +862,183 @@ def _extract_action_plan_segments(doc: Dict[str, Any]) -> List[Dict[str, str]]:
     return segments
 
 
+_ACTION_PLAN_ROW_GENERIC_TERMS = {
+    "aksiyon",
+    "aksiyonlar",
+    "alinmasinda",
+    "enerji",
+    "kim",
+    "kimdir",
+    "kimin",
+    "neymis",
+    "plan",
+    "plani",
+    "planinda",
+    "pozisyon",
+    "sorumlu",
+    "tarih",
+    "tarihi",
+    "termin",
+    "yonetim",
+    "yonetimi",
+}
+
+
+def _is_action_plan_row_lookup_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    has_detail_intent = any(
+        marker in normalized
+        for marker in (
+            "sorumlu",
+            "pozisyon",
+            "kim",
+            "kimin",
+            "termin",
+            "tarih",
+            "sure",
+            "gun",
+            "kac",
+            "ne kadar",
+        )
+    )
+    has_action_row_clue = any(
+        marker in normalized
+        for marker in (
+            "alin",
+            "asma",
+            "bolme",
+            "cam",
+            "deplase",
+            "klima",
+            "merkez",
+            "montaj",
+            "salon",
+            "sokul",
+            "sökül",
+            "sube",
+            "tavan",
+            "tesisat",
+        )
+    )
+    return _is_action_plan_question(question) and has_detail_intent and has_action_row_clue
+
+
+def _extract_action_plan_detail_rows(doc: Dict[str, Any]) -> List[Dict[str, str]]:
+    source_text = _full_kb_source_text(doc)
+    detail_block = _extract_normalized_span(
+        source_text,
+        ("Detaylı Proje Planlama", "Detayli Proje Planlama"),
+        (
+            "[Page 2]",
+            "İletişim/Eğitim Planı",
+            "Iletisim/Egitim Plani",
+            "Proje iyileştirmelerinin",
+            "Proje takip",
+        ),
+    )
+    has_detail_block = bool(detail_block)
+    if detail_block:
+        source_text = detail_block
+
+    rows: List[Dict[str, str]] = []
+    row_prefix = r"(?:^|(?:\n|\s)-\s*)" if has_detail_block else r"(?:^|\n|\s)-\s*"
+    row_pattern = re.compile(
+        row_prefix
+        + r"(?P<action>.*?)\.\s*"
+        r"Sorumlu\s+pozisyon:\s*(?P<responsible>.*?)\.\s*"
+        r"Termin\s+tarihi:\s*(?P<deadline>.*?)(?:\.|$)",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for match in row_pattern.finditer(source_text):
+        action = re.sub(r"\s+", " ", match.group("action")).strip(" :-")
+        responsible = re.sub(r"\s+", " ", match.group("responsible")).strip(" :-")
+        deadline = re.sub(r"\s+", " ", match.group("deadline")).strip(" :-")
+        if action and responsible:
+            rows.append(
+                {
+                    "action": action,
+                    "responsible": responsible,
+                    "deadline": deadline,
+                }
+            )
+    return rows
+
+
+def _score_action_plan_row(question: str, action: str) -> float:
+    row_text = _normalize_for_match(action)
+    row_terms = set(row_text.split())
+    query_terms = {
+        term
+        for term in _query_terms(question)
+        if len(term) >= 3 and term not in _ACTION_PLAN_ROW_GENERIC_TERMS
+    }
+    if not query_terms or not row_text:
+        return 0.0
+
+    score = 0.0
+    for term in query_terms:
+        if term in row_terms:
+            score += 2.0
+        elif len(term) >= 4 and term in row_text:
+            score += 1.0
+        elif len(term) >= 5 and any(
+            row_term.startswith(term[:5]) or term.startswith(row_term[:5])
+            for row_term in row_terms
+            if len(row_term) >= 5
+        ):
+            score += 0.75
+    return score
+
+
+def _format_action_plan_row_segment(question: str, row: Dict[str, str]) -> str:
+    normalized_question = _normalize_for_match(question)
+    details: List[str] = []
+    if "sorumlu" in normalized_question or "pozisyon" in normalized_question or "kim" in normalized_question:
+        details.append(f"sorumlu pozisyon {row['responsible']}")
+    if any(marker in normalized_question for marker in ("termin", "tarih", "sure", "gun", "kac", "ne kadar")):
+        if row.get("deadline"):
+            details.append(f"termin tarihi {row['deadline']}")
+    if not details:
+        details.append(f"sorumlu pozisyon {row['responsible']}")
+        if row.get("deadline"):
+            details.append(f"termin tarihi {row['deadline']}")
+    return f"{row['action']}: {'; '.join(details)}."
+
+
+def _extract_action_plan_row_lookup_segments(
+    question: str,
+    docs: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    if not _is_action_plan_row_lookup_question(question):
+        return []
+
+    best_row: Optional[Dict[str, str]] = None
+    best_doc: Optional[Dict[str, Any]] = None
+    best_score = 0.0
+
+    for doc_rank, doc in enumerate(docs[:5]):
+        if not _is_kb_document(doc):
+            continue
+        for row in _extract_action_plan_detail_rows(doc):
+            score = _score_action_plan_row(question, row["action"]) - doc_rank * 0.1
+            if score > best_score:
+                best_score = score
+                best_row = row
+                best_doc = doc
+
+    if not best_row or not best_doc or best_score < 2.0:
+        return []
+
+    return [
+        {
+            "segment": _format_action_plan_row_segment(question, best_row),
+            "title": _doc_title(best_doc),
+            "doc_id": _doc_identifier(best_doc),
+        }
+    ]
+
+
 def _extract_normalized_span(
     text: str,
     start_markers: tuple[str, ...],
@@ -1379,6 +1556,10 @@ def _extract_relevant_kb_segments(question: str, docs: List[Dict[str, Any]], lim
             return erp_segments
 
     if _is_action_plan_question(question):
+        action_plan_row_segments = _extract_action_plan_row_lookup_segments(question, docs)
+        if action_plan_row_segments:
+            return action_plan_row_segments
+
         for doc in docs[:5]:
             if not _is_kb_document(doc):
                 continue
