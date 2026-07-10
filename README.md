@@ -125,14 +125,16 @@ Run the automated test suite:
 python -m pytest
 ```
 
-Latest local test result:
+Core test suite without live-server chat scenarios:
 
 ```text
-109 passed, 9 skipped, 3 warnings
+134 passed, 3 warnings
 ```
 
-The skipped tests are server-dependent chat scenario tests. The warnings are
-Pydantic deprecation warnings and do not indicate a failing application test.
+The live-server chat scenarios in `tests/test_chat_scenarios.py` call a
+running `localhost:8000` application and can vary with the active local
+server, indexes, and `.env` settings. The warnings are Pydantic deprecation
+warnings and do not indicate a failing application test.
 
 ## Evaluation Summary And Limitations
 
