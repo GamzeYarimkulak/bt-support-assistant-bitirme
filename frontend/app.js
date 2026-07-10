@@ -9,47 +9,281 @@ const API_ENDPOINTS = {
 
 let chatMessages = [];
 let sessionId = null;
+let conversations = [];
+let currentConversationId = null;
 let qualityLoaded = false;
-const CHAT_HISTORY_STORAGE_KEY = 'bt_support_chat_messages';
-const MAX_STORED_CHAT_MESSAGES = 20;
+const LEGACY_CHAT_HISTORY_STORAGE_KEY = 'bt_support_chat_messages';
+const LEGACY_SESSION_STORAGE_KEY = 'bt_support_session_id';
+const CHAT_CONVERSATIONS_STORAGE_KEY = 'bt_support_conversations';
+const MAX_STORED_CONVERSATIONS = 30;
+const MAX_STORED_CHAT_MESSAGES = 40;
 const MAX_CONTEXT_MESSAGES = 10;
+const MAX_API_MESSAGE_LENGTH = 1800;
 
-function getOrCreateSessionId() {
-    if (sessionId) {
-        return sessionId;
+function createSessionId() {
+    return `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+function createConversationId() {
+    return `conversation_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+}
+
+function sanitizeStoredMessage(message) {
+    if (!message || !['user', 'assistant', 'error'].includes(message.role) || !message.text) {
+        return null;
     }
 
-    sessionId = localStorage.getItem('bt_support_session_id');
-    if (!sessionId) {
-        sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-        localStorage.setItem('bt_support_session_id', sessionId);
+    return {
+        ...message,
+        role: message.role,
+        text: String(message.text),
+        timestamp: Number(message.timestamp) || Date.now()
+    };
+}
+
+function deriveConversationTitle(messages) {
+    const firstUserMessage = (messages || []).find(message => message.role === 'user' && message.text);
+    const rawTitle = firstUserMessage ? firstUserMessage.text : 'Yeni sohbet';
+    const cleanTitle = String(rawTitle).replace(/\s+/g, ' ').trim();
+
+    if (!cleanTitle) {
+        return 'Yeni sohbet';
     }
 
-    return sessionId;
+    return cleanTitle.length > 58 ? `${cleanTitle.substring(0, 55).trim()}...` : cleanTitle;
+}
+
+function sanitizeStoredConversation(conversation) {
+    if (!conversation || typeof conversation !== 'object') {
+        return null;
+    }
+
+    const messages = Array.isArray(conversation.messages)
+        ? conversation.messages.map(sanitizeStoredMessage).filter(Boolean).slice(-MAX_STORED_CHAT_MESSAGES)
+        : [];
+
+    if (!messages.length) {
+        return null;
+    }
+
+    const now = Date.now();
+    const createdAt = Number(conversation.createdAt) || Number(messages[0]?.timestamp) || now;
+    const updatedAt = Number(conversation.updatedAt) || Number(messages[messages.length - 1]?.timestamp) || createdAt;
+
+    return {
+        id: conversation.id || createConversationId(),
+        sessionId: conversation.sessionId || createSessionId(),
+        title: conversation.title || deriveConversationTitle(messages),
+        createdAt,
+        updatedAt,
+        messages
+    };
 }
 
 function loadStoredChatMessages() {
-    try {
-        const storedMessages = JSON.parse(localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || '[]');
-        if (!Array.isArray(storedMessages)) {
-            chatMessages = [];
-            return;
-        }
+    conversations = [];
 
-        chatMessages = storedMessages
-            .filter(message => message && ['user', 'assistant'].includes(message.role) && message.text)
-            .slice(-MAX_STORED_CHAT_MESSAGES);
+    try {
+        const storedConversations = JSON.parse(localStorage.getItem(CHAT_CONVERSATIONS_STORAGE_KEY) || '[]');
+        if (Array.isArray(storedConversations)) {
+            conversations = storedConversations
+                .map(sanitizeStoredConversation)
+                .filter(Boolean);
+        }
     } catch (error) {
-        chatMessages = [];
-        localStorage.removeItem(CHAT_HISTORY_STORAGE_KEY);
+        conversations = [];
+        localStorage.removeItem(CHAT_CONVERSATIONS_STORAGE_KEY);
     }
+
+    try {
+        const legacyMessages = JSON.parse(localStorage.getItem(LEGACY_CHAT_HISTORY_STORAGE_KEY) || '[]')
+            .map(sanitizeStoredMessage)
+            .filter(Boolean);
+
+        if (legacyMessages.length) {
+            conversations.unshift({
+                id: createConversationId(),
+                sessionId: localStorage.getItem(LEGACY_SESSION_STORAGE_KEY) || createSessionId(),
+                title: deriveConversationTitle(legacyMessages),
+                createdAt: Number(legacyMessages[0]?.timestamp) || Date.now(),
+                updatedAt: Number(legacyMessages[legacyMessages.length - 1]?.timestamp) || Date.now(),
+                messages: legacyMessages.slice(-MAX_STORED_CHAT_MESSAGES)
+            });
+            localStorage.removeItem(LEGACY_CHAT_HISTORY_STORAGE_KEY);
+            localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
+        }
+    } catch (error) {
+        localStorage.removeItem(LEGACY_CHAT_HISTORY_STORAGE_KEY);
+    }
+
+    conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+    conversations = conversations.slice(0, MAX_STORED_CONVERSATIONS);
+    chatMessages = [];
+    sessionId = null;
+    currentConversationId = null;
+    saveConversations();
+}
+
+function saveConversations() {
+    conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+    conversations = conversations.slice(0, MAX_STORED_CONVERSATIONS);
+    localStorage.setItem(CHAT_CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations));
+}
+
+function getActiveConversation() {
+    return conversations.find(conversation => conversation.id === currentConversationId) || null;
+}
+
+function persistCurrentConversation() {
+    const messagesToStore = chatMessages
+        .map(sanitizeStoredMessage)
+        .filter(Boolean)
+        .slice(-MAX_STORED_CHAT_MESSAGES);
+
+    if (!messagesToStore.length) {
+        return null;
+    }
+
+    const now = Date.now();
+    let conversation = getActiveConversation();
+
+    if (!conversation) {
+        conversation = {
+            id: createConversationId(),
+            sessionId: sessionId || createSessionId(),
+            title: deriveConversationTitle(messagesToStore),
+            createdAt: now,
+            updatedAt: now,
+            messages: messagesToStore
+        };
+        conversations.unshift(conversation);
+        currentConversationId = conversation.id;
+    } else {
+        conversation.messages = messagesToStore;
+        conversation.title = deriveConversationTitle(messagesToStore);
+        conversation.updatedAt = now;
+        conversation.sessionId = conversation.sessionId || sessionId || createSessionId();
+    }
+
+    sessionId = conversation.sessionId;
+    saveConversations();
+    renderConversationList();
+    return conversation;
 }
 
 function saveChatMessages() {
-    const messagesToStore = chatMessages
-        .filter(message => ['user', 'assistant'].includes(message.role))
-        .slice(-MAX_STORED_CHAT_MESSAGES);
-    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(messagesToStore));
+    persistCurrentConversation();
+}
+
+function getOrCreateSessionId() {
+    const conversation = persistCurrentConversation();
+    if (conversation) {
+        return conversation.sessionId;
+    }
+
+    if (!sessionId) {
+        sessionId = createSessionId();
+    }
+    return sessionId;
+}
+
+function formatConversationDate(timestamp) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    return date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' });
+}
+
+function renderConversationList() {
+    const list = document.getElementById('conversation-list');
+    if (!list) {
+        return;
+    }
+
+    if (!conversations.length) {
+        list.innerHTML = '<div class="conversation-empty">Kayit yok</div>';
+        return;
+    }
+
+    list.innerHTML = conversations.map(conversation => `
+        <div class="conversation-item ${conversation.id === currentConversationId ? 'active' : ''}">
+            <button class="conversation-open" data-conversation-id="${escapeHtml(conversation.id)}">
+                <span class="conversation-title">${escapeHtml(conversation.title)}</span>
+                <span class="conversation-meta">
+                    <span>${formatConversationDate(conversation.updatedAt)}</span>
+                    <span>${conversation.messages.length} mesaj</span>
+                </span>
+            </button>
+            <button class="conversation-delete" data-delete-conversation-id="${escapeHtml(conversation.id)}" aria-label="Sohbeti sil">Sil</button>
+        </div>
+    `).join('');
+
+    list.querySelectorAll('.conversation-open').forEach(item => {
+        item.addEventListener('click', () => {
+            selectConversation(item.dataset.conversationId);
+        });
+    });
+
+    list.querySelectorAll('.conversation-delete').forEach(deleteButton => {
+        deleteButton.addEventListener('click', event => {
+            event.stopPropagation();
+            deleteConversation(deleteButton.dataset.deleteConversationId);
+        });
+    });
+}
+
+function selectConversation(conversationId) {
+    const conversation = conversations.find(item => item.id === conversationId);
+    if (!conversation) {
+        return;
+    }
+
+    currentConversationId = conversation.id;
+    sessionId = conversation.sessionId || createSessionId();
+    conversation.sessionId = sessionId;
+    chatMessages = conversation.messages.map(message => ({ ...message }));
+    saveConversations();
+    renderConversationList();
+    renderChatMessages();
+}
+
+function startNewChat() {
+    currentConversationId = null;
+    sessionId = null;
+    chatMessages = [];
+    renderConversationList();
+    renderChatMessages();
+
+    const queryInput = document.getElementById('query-input');
+    if (queryInput) {
+        queryInput.focus();
+    }
+}
+
+function deleteConversation(conversationId) {
+    if (!conversationId || !window.confirm('Bu sohbet silinsin mi?')) {
+        return;
+    }
+
+    conversations = conversations.filter(conversation => conversation.id !== conversationId);
+    if (currentConversationId === conversationId) {
+        currentConversationId = null;
+        sessionId = null;
+        chatMessages = [];
+        renderChatMessages();
+    }
+
+    saveConversations();
+    renderConversationList();
+}
+
+function truncateForApi(value, maxLength = MAX_API_MESSAGE_LENGTH) {
+    const text = String(value || '');
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return `${text.substring(0, maxLength).trim()}...`;
 }
 
 function buildApiConversationHistory(messages) {
@@ -58,7 +292,7 @@ function buildApiConversationHistory(messages) {
         .slice(-MAX_CONTEXT_MESSAGES)
         .map(message => ({
             role: message.role,
-            content: String(message.text)
+            content: truncateForApi(message.text)
         }));
 }
 
@@ -150,19 +384,61 @@ function renderSources(sources) {
 
     return `
         <div class="message-sources">
-            <div class="message-sources-title">Kaynaklar</div>
+            <div class="message-sources-title">
+                <span>Yanıtın dayandığı kaynaklar</span>
+                <span class="message-sources-count">${sources.length}</span>
+            </div>
             ${sources.map((source, idx) => {
                 const title = source.title || source.doc_id || `Kaynak ${idx + 1}`;
                 const score = Number(source.relevance_score ?? 0);
+                const snippet = String(source.snippet || '').trim();
                 return `
                     <div class="message-source-item">
-                        <span class="message-source-title">${idx + 1}. ${escapeHtml(title)}</span>
-                        <span class="message-source-score">Skor ${score.toFixed(2)}</span>
+                        <div class="message-source-header">
+                            <span class="message-source-index">${idx + 1}</span>
+                            <div class="message-source-heading">
+                                <span class="message-source-title">${escapeHtml(title)}</span>
+                                <span class="message-source-meta">
+                                    ${escapeHtml(getSourceTypeLabel(source.doc_type))}
+                                    <span aria-hidden="true">•</span>
+                                    ${escapeHtml(getSourceScoreLabel(score, source.doc_type))}
+                                </span>
+                            </div>
+                            <span class="message-source-score">${score.toFixed(2)}</span>
+                        </div>
+                        ${snippet ? `<div class="message-source-snippet">${escapeHtml(snippet)}</div>` : ''}
                     </div>
                 `;
             }).join('')}
         </div>
     `;
+}
+
+function getSourceTypeLabel(docType = '') {
+    const normalized = String(docType || '').toLowerCase();
+    if (['kb', 'document', 'pdf'].includes(normalized)) {
+        return 'Bilgi dokümanı';
+    }
+    if (normalized === 'playbook') {
+        return 'Genel BT kontrol listesi';
+    }
+    if (normalized.includes('ticket')) {
+        return 'Geçmiş destek kaydı';
+    }
+    return 'Kaynak';
+}
+
+function getSourceScoreLabel(score, docType = '') {
+    if (String(docType || '').toLowerCase() === 'playbook') {
+        return 'genel öneri';
+    }
+    if (score >= 0.7) {
+        return 'güçlü eşleşme';
+    }
+    if (score >= 0.45) {
+        return 'orta eşleşme';
+    }
+    return 'zayıf eşleşme';
 }
 
 function renderDebugInfo(debugInfo) {
@@ -178,10 +454,28 @@ function renderDebugInfo(debugInfo) {
             ? '(BM25 ağırlıklı)'
             : '(Dengeli)';
 
+    const scenarioHtml = debugInfo.support_scenario
+        ? `
+                <div class="debug-item">
+                    <span class="debug-label">Destek senaryosu:</span>
+                    <span class="debug-value">${escapeHtml(debugInfo.support_scenario)}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Cevap kaynağı:</span>
+                    <span class="debug-value">${debugInfo.answer_source_count ?? 0}</span>
+                </div>
+                <div class="debug-item">
+                    <span class="debug-label">Genel kontrol listesi:</span>
+                    <span class="debug-value">${debugInfo.used_playbook_fallback ? 'Evet' : 'Hayır'}</span>
+                </div>
+        `
+        : '';
+
     return `
-        <div class="message-debug-info">
-            <div class="message-debug-title">Arama detayları</div>
+        <details class="message-debug-info">
+            <summary class="message-debug-title">Teknik arama detayları</summary>
             <div class="message-debug-content">
+                ${scenarioHtml}
                 <div class="debug-item">
                     <span class="debug-label">Dinamik Alpha:</span>
                     <span class="debug-value">${alphaLabel}</span>
@@ -204,7 +498,7 @@ function renderDebugInfo(debugInfo) {
                     <span class="debug-value">${debugInfo.hybrid_results_count || 0}</span>
                 </div>
             </div>
-        </div>
+        </details>
     `;
 }
 
@@ -304,6 +598,40 @@ function escapeHtml(value) {
     const div = document.createElement('div');
     div.textContent = value === null || value === undefined ? '' : String(value);
     return div.innerHTML;
+}
+
+function getApiErrorMessage(errorData, fallbackMessage) {
+    const detail = errorData && errorData.detail;
+
+    if (!detail) {
+        return fallbackMessage;
+    }
+
+    if (typeof detail === 'string') {
+        return detail;
+    }
+
+    if (Array.isArray(detail)) {
+        return detail
+            .map(item => {
+                if (typeof item === 'string') {
+                    return item;
+                }
+                if (item && typeof item === 'object') {
+                    const location = Array.isArray(item.loc) ? item.loc.join('.') : '';
+                    const message = item.msg || item.message || JSON.stringify(item);
+                    return location ? `${location}: ${message}` : message;
+                }
+                return String(item);
+            })
+            .join('; ');
+    }
+
+    if (typeof detail === 'object') {
+        return detail.message || detail.msg || JSON.stringify(detail);
+    }
+
+    return String(detail);
 }
 
 function scrollToBottom() {
@@ -435,7 +763,7 @@ async function submitChatQuery() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(getApiErrorMessage(errorData, `HTTP ${response.status}: ${response.statusText}`));
         }
 
         const data = await response.json();
@@ -512,7 +840,7 @@ async function loadAnomalyQuality() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
+            throw new Error(getApiErrorMessage(errorData, `HTTP ${response.status}`));
         }
 
         displayAnomalyQuality(await response.json());
@@ -612,7 +940,7 @@ async function loadAnomalyStats() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
+            throw new Error(getApiErrorMessage(errorData, `HTTP ${response.status}`));
         }
 
         displayAnomalyStats(await response.json());
@@ -719,7 +1047,7 @@ async function loadAnomalyEvents() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
+            throw new Error(getApiErrorMessage(errorData, `HTTP ${response.status}`));
         }
 
         displayAnomalyEvents(await response.json());
@@ -890,17 +1218,19 @@ function hideAnomalyResult(section) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
-    getOrCreateSessionId();
     loadStoredChatMessages();
+    renderConversationList();
     renderChatMessages();
 
     const chatSubmitBtn = document.getElementById('chat-submit-btn');
     const queryInput = document.getElementById('query-input');
+    const newChatBtn = document.getElementById('new-chat-btn');
     const loadQualityBtn = document.getElementById('load-quality-btn');
     const loadStatsBtn = document.getElementById('load-stats-btn');
     const loadEventsBtn = document.getElementById('load-events-btn');
 
     chatSubmitBtn.addEventListener('click', submitChatQuery);
+    newChatBtn.addEventListener('click', startNewChat);
     queryInput.addEventListener('keydown', event => {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();

@@ -63,6 +63,54 @@ NON_IT_KEYWORDS = [
 ]
 
 
+CORPORATE_KB_ENTITY_MARKERS = (
+    "ozdilek",
+    "talimat",
+    "dokuman",
+    "belge",
+    "prosedur",
+    "yonerge",
+    "gomulu",
+    "elektronik",
+    "yapay zeka",
+    "corewish",
+    "sap",
+)
+
+CORPORATE_KB_INTENT_MARKERS = (
+    "bakim",
+    "bahseder",
+    "bilgi",
+    "gorev",
+    "ilke",
+    "kullanim",
+    "nasil",
+    "soruml",
+    "standart",
+    "tasarim",
+    "yetkilendirme",
+    "yonetim",
+    "yazilim",
+)
+
+
+def _normalize_keyword_text(text: str) -> str:
+    translation = str.maketrans(
+        "\u00e7\u011f\u0131\u00f6\u015f\u00fc\u00c7\u011e\u0130\u00d6\u015e\u00dc",
+        "cgiosuCGIOSU",
+    )
+    normalized = str(text or "").translate(translation).casefold()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _looks_like_corporate_kb_query(query: str) -> bool:
+    normalized = _normalize_keyword_text(query)
+    has_entity = any(marker in normalized for marker in CORPORATE_KB_ENTITY_MARKERS)
+    has_intent = any(marker in normalized for marker in CORPORATE_KB_INTENT_MARKERS)
+    return has_entity and has_intent
+
+
 class ITRelevanceChecker:
     """
     Checks if a query is IT-related or not.
@@ -119,6 +167,9 @@ class ITRelevanceChecker:
                 logger.debug("non_it_query_detected_physical_open", query=query[:50])
                 return False, 0.95  # Very high confidence it's not IT-related
         
+        if _looks_like_corporate_kb_query(query):
+            return True, 0.85
+
         # Count IT keyword matches FIRST
         it_matches = sum(1 for pattern in self.it_patterns if pattern.search(query_lower))
         

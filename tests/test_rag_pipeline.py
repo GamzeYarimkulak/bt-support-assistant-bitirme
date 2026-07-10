@@ -8,7 +8,10 @@ from core.rag.pipeline import (
     RAGPipeline,
     RAGResult,
     _build_contextual_retrieval_query,
+    _build_support_playbook_doc,
+    _docs_for_direct_segments,
     _extract_relevant_kb_segments,
+    _filter_advisory_docs_for_question,
     _requires_source_grounded_kb_answer,
     generate_answer_with_stub,
 )
@@ -134,6 +137,90 @@ class TestLLMStub:
 
         assert "Alınan önemsiz elektronik posta" in answer
         assert "DOKÜMAN ONAY MERCİ" not in answer
+
+    def test_section_heading_question_returns_following_step(self):
+        """Section-heading questions should return the child instruction, not nearby PDF noise."""
+        docs = [
+            {
+                "id": "ozdilek_kb_0018_cbdbe414_chunk_002",
+                "doc_id": "ozdilek_kb_0018_cbdbe414_chunk_002",
+                "document_id": "ozdilek_kb_0018_cbdbe414",
+                "doc_type": "kb",
+                "title": (
+                    "DST.T.BT.030_0 BT KAMPANYA SİSTEMİNİN FELAKET SENAYOSUNUN "
+                    "HAZIRLANMASI VE İŞLETİLMESİ TALİMATI"
+                ),
+                "content": (
+                    "BT.030BT KAMPANYA SİSTEMİNİN FELAKET SENAYOSUNUN HAZIRLANMASI "
+                    "VE İŞLETİLMESİ TALİMATI SAYFA NO 3/5 DEĞİŞİKLİKHAZIRLAYAN "
+                    "Bilgi Güvenliği Yön.Sis.K ONAY Kalite, Eğitim ve İ.K Gen "
+                    "YÜRÜRLÜK TARİHİ 29.1.2022 TARİH 29.1.2022 NO 0 Resim 3 Resim 4 "
+                    "3.1.4.3Running Tasks kısmında “Failover Test %100” olduktan sonra "
+                    "Disaster vCenter üzerinde, aktif ettiğimiz sistemin adı ile VM oluşur. "
+                    "(Resim 7) [Page 4] KOD NO DST.T.BT.030BT KAMPANYA SİSTEMİNİN "
+                    "FELAKET SENAYOSUNUN HAZIRLANMASI VE İŞLETİLMESİ TALİMATI SAYFA NO "
+                    "4/5 DEĞİŞİKLİKHAZIRLAYAN Bilgi Güvenliği Yön.Sis.K ONAY Kalite, "
+                    "Eğitim ve İ.K Gen YÜRÜRLÜK TARİHİ 29.1.2022 TARİH 29.1.2022 NO 0 "
+                    "Resim 7 3.1.4.4Kritik sistem asgari olarak; replikasyon süresi 1 dk, "
+                    "Failover (aktif olma) süresi ise 3 dakikadır. "
+                    "3.2 Disasterdan Canlı Ortama geçiş "
+                    "3.2.1ZVM (Zerto Virtual Manager) arayüzüne bağlanılıp stop test "
+                    "failover butonuna tıklanır. Disaster vCenter üzerinde, aktif edilen "
+                    "sistemin adı ile oluşan VM otomatik olarak silinir ve sistemler Merkez "
+                    "üzerinden çalışmaya devam eder. "
+                    "3.3İç Denetim Müdürlüğü tarafından talimat yayına girdikten sonra "
+                    "talimatın yeterliliği tetkiki ve canlı sistemi bozmadan gerçekleştirilir."
+                ),
+                "score": 0.9,
+            }
+        ]
+
+        answer = generate_answer_with_stub(
+            "özdilekte KAMPANYA SİSTEMİNİN FELAKET SENARYOSUNDA Disasterdan Canlı Ortama geçiş için ne deniyor",
+            docs,
+            language="tr",
+        )
+
+        assert "Disasterdan Canlı Ortama geçiş: ZVM (Zerto Virtual Manager)" in answer
+        assert "stop test failover butonuna tıklanır" in answer
+        assert "VM otomatik olarak silinir" in answer
+        assert "Running Tasks" not in answer
+        assert "DEĞİŞİKLİKHAZIRLAYAN" not in answer
+
+    def test_electronic_design_principles_prefer_heading_block(self):
+        """Design-principle questions should use the principles block, not later PCB standards."""
+        docs = [
+            {
+                "id": "ozdilek_kb_design_chunk_018",
+                "doc_id": "ozdilek_kb_design_chunk_018",
+                "document_id": "ozdilek_kb_design",
+                "doc_type": "kb",
+                "title": "TKS.T.ARGE.002 Gomulu Sistem Tasarimi ve Yazilim Gelistirme Talimati",
+                "content": (
+                    "3.UYGULAMA ELEKTRONIK TASARIM ILKELERI "
+                    "Modulerlik Tasarimi moduler bilesenlere bolmek degisiklik yapmayi kolaylastirir. "
+                    "Dokumantasyon Tum tasarim sureci boyunca ayrintili dokumantasyon olusturulmalidir. "
+                    "Tasarim Dogrulama ve Test Tum tasarim asamalarinda dogrulama ve test surecleri uygulanmalidir. "
+                    "Guc Yonetimi Guc tuketimi en aza indirgenmelidir. "
+                    "GOMULU YAZILIM TASARIM ILKELERI Verimlilik Kod verimli calismalidir. "
+                    "ELEKTRONIK TASARIM STANDARTLARI PCB TASARIMI PCB tasarim sureclerinde IEEE standartlari uygulanir."
+                ),
+                "score": 0.8,
+            }
+        ]
+
+        question = "ozdilekte elektronik tasarim ilkelerinden bahseder misin"
+        segments = _extract_relevant_kb_segments(question, docs)
+        aligned_docs = _docs_for_direct_segments(docs, segments)
+        answer = generate_answer_with_stub(question, docs, language="tr")
+
+        combined_segments = " ".join(item["segment"] for item in segments)
+        assert "Modulerlik" in combined_segments
+        assert "Dokumantasyon" in combined_segments
+        assert "Tasarim Dogrulama ve Test" in combined_segments
+        assert "Guc Yonetimi" in combined_segments
+        assert "PCB TASARIMI" not in aligned_docs[0]["text"]
+        assert "PCB TASARIMI" not in answer
 
     def test_action_plan_question_uses_labeled_form_fields(self):
         """Action plan forms should return labeled source fields, not random date rows."""
@@ -274,6 +361,28 @@ class TestLLMStub:
         assert "Switch" not in contextual_query
         assert _requires_source_grounded_kb_answer(contextual_query) is True
 
+    def test_explicit_design_principles_correction_is_not_folded_into_previous_context(self):
+        """A correction that names a new design-principles section should stand alone."""
+        history = [
+            {
+                "role": "user",
+                "content": "ozdilekte elektronik tasarim ilkelerinden bahseder misin",
+            },
+            {
+                "role": "assistant",
+                "content": "Kaynakta elektronik tasarim ilkeleri ozetlendi.",
+            },
+        ]
+        question = (
+            "bunlari sormadim ben, gomulu yazilim tasarim ilkelerinden "
+            "bahseder misin"
+        )
+
+        contextual_query = _build_contextual_retrieval_query(question, history)
+
+        assert contextual_query == question
+        assert "Takip sorusu/duzeltme" not in contextual_query
+
     def test_desktop_laptop_maintenance_answer_extracts_single_table_row(self):
         """Maintenance table lookups should not return the whole device table."""
         docs = [
@@ -342,6 +451,46 @@ class TestLLMStub:
 
         for keyword in ("disk", "alan", "temizlik", "dosya", "silme"):
             assert keyword in answer.lower()
+
+    def test_advisory_docs_are_filtered_to_question_scenario(self):
+        """Wrong high-score sources should not drive advisory answers for a specific scenario."""
+        docs = [
+            {
+                "ticket_id": "TCK-PRINTER",
+                "doc_type": "ticket",
+                "short_description": "Yazdirma kuyrugu takildi",
+                "resolution": "Spooler servisi yeniden baslatildi.",
+                "score": 0.95,
+            },
+            {
+                "ticket_id": "TCK-MAIL",
+                "doc_type": "ticket",
+                "short_description": "Mail gonderemiyorum",
+                "resolution": "Outlook profili ve Exchange mail flow kontrol edildi.",
+                "score": 0.65,
+            },
+        ]
+
+        question = "Email gonderemiyorum, hata veriyor"
+        filtered_docs = _filter_advisory_docs_for_question(question, docs)
+        answer = generate_answer_with_stub(question, filtered_docs, language="tr")
+
+        assert [doc["ticket_id"] for doc in filtered_docs] == ["TCK-MAIL"]
+        assert "TCK-MAIL" in answer
+        assert "TCK-PRINTER" not in answer
+        assert "Yaz" not in answer
+
+    def test_playbook_fallback_is_labeled_when_scenario_sources_are_missing(self):
+        """Fallback guidance should be labeled as a checklist, not as a ticket source."""
+        question = "Yazici yazdirmiyor, nasil duzeltebilirim?"
+        doc = _build_support_playbook_doc(question, "printer", "tr")
+        answer = generate_answer_with_stub(question, [doc], language="tr")
+
+        assert doc["doc_type"] == "playbook"
+        assert doc["doc_id"] == "playbook_printer"
+        assert "kontrol listesi" in doc["title"].lower()
+        assert "genel BT kontrol listesidir" in answer
+        assert "Geçmiş benzer kayıtlarda" not in answer
 
 
 class TestRAGPipelineNoAnswer:

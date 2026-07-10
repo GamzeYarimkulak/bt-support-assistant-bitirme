@@ -464,6 +464,8 @@ def _source_label_tr(doc_type: str) -> str:
     normalized = str(doc_type or "").casefold()
     if normalized in {"kb", "document", "pdf"}:
         return "Bilgi dokümanı"
+    if normalized == "playbook":
+        return "Genel BT kontrol listesi"
     return "Ticket"
 
 
@@ -471,6 +473,8 @@ def _source_label_en(doc_type: str) -> str:
     normalized = str(doc_type or "").casefold()
     if normalized in {"kb", "document", "pdf"}:
         return "Knowledge document"
+    if normalized == "playbook":
+        return "General IT checklist"
     return "Ticket"
 
 
@@ -553,6 +557,9 @@ def _requires_source_grounded_kb_answer(question: str) -> bool:
         "olacakmis",
         "aksiyon planı",
         "aksiyon plani",
+        "ilke",
+        "ilkeleri",
+        "tasarim",
     )
     return any(marker in normalized or marker in ascii_normalized for marker in source_markers)
 
@@ -581,14 +588,55 @@ _KB_STOPWORDS = {
 }
 
 
+_TURKISH_CHAR_TRANSLATION = str.maketrans(
+    "\u00e7\u011f\u0131\u00f6\u015f\u00fc\u00c7\u011e\u0130\u00d6\u015e\u00dc",
+    "cgiosuCGIOSU",
+)
+
+
 def _normalize_for_match(text: str) -> str:
-    translation = str.maketrans(
-        "çğıöşüÇĞİÖŞÜ",
-        "cgiosuCGIOSU",
-    )
-    normalized = text.translate(translation).casefold()
+    normalized = str(text or "").translate(_TURKISH_CHAR_TRANSLATION).casefold()
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _normalize_for_match_with_offsets(text: str) -> tuple[str, List[int]]:
+    """Normalize text like _normalize_for_match while keeping original offsets."""
+    normalized_chars: List[str] = []
+    offsets: List[int] = []
+    pending_space = False
+
+    for original_index, char in enumerate(str(text or "")):
+        for normalized_char in char.translate(_TURKISH_CHAR_TRANSLATION).casefold():
+            if ("a" <= normalized_char <= "z") or normalized_char.isdigit():
+                if pending_space and normalized_chars:
+                    normalized_chars.append(" ")
+                    offsets.append(original_index)
+                pending_space = False
+                normalized_chars.append(normalized_char)
+                offsets.append(original_index)
+            else:
+                pending_space = bool(normalized_chars)
+
+    return "".join(normalized_chars), offsets
+
+
+def _repair_mojibake_text(text: str) -> str:
+    """Repair common UTF-8 text that was decoded as Latin-1 before matching."""
+    value = str(text or "")
+    try:
+        repaired = value.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return value
+    return repaired or value
+
+
+def _normalize_for_scenario_match(text: str) -> str:
+    value = str(text or "")
+    repaired = _repair_mojibake_text(value)
+    if repaired == value:
+        return _normalize_for_match(value)
+    return _normalize_for_match(f"{value} {repaired}")
 
 
 def _query_terms(question: str) -> set[str]:
@@ -616,7 +664,7 @@ def _split_kb_segments(text: str) -> List[str]:
     if not clean_text:
         return []
 
-    numbered_segments = re.split(r"(?=\b\d+(?:\.\d+)+\.?\s*)", clean_text)
+    numbered_segments = re.split(r"(?<![\w.])(?=[1-9](?:\.\d+){1,5}\.?\s*)", clean_text)
     segments: List[str] = []
     for segment in numbered_segments:
         segment = segment.strip(" -")
@@ -627,6 +675,17 @@ def _split_kb_segments(text: str) -> List[str]:
         else:
             segments.append(segment)
     return segments
+
+
+def _strip_inline_pdf_metadata(text: str) -> str:
+    """Remove page header/footer fragments that land in the middle of OCR text."""
+    cleaned = re.sub(
+        r"\[Page\s+\d+\].{0,650}\bNO\s+\d+\s*",
+        " ",
+        str(text or ""),
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", cleaned).strip(" -")
 
 
 def _clean_kb_answer_segment(segment: str) -> str:
@@ -661,7 +720,7 @@ def _clean_kb_answer_segment(segment: str) -> str:
 
     text = re.sub(r"^\[Page\s+\d+\]\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^\d+(?:\.\d+)*\.?\s*", "", text).strip()
-    return text
+    return _strip_inline_pdf_metadata(text)
 
 
 def _is_action_plan_question(question: str) -> bool:
@@ -756,6 +815,189 @@ def _extract_action_plan_segments(doc: Dict[str, Any]) -> List[Dict[str, str]]:
             }
         )
     return segments
+
+
+def _extract_normalized_span(
+    text: str,
+    start_markers: tuple[str, ...],
+    end_markers: tuple[str, ...],
+) -> str:
+    normalized, offsets = _normalize_for_match_with_offsets(text)
+    if not normalized or not offsets:
+        return ""
+
+    start_matches: List[tuple[int, str]] = []
+    for marker in start_markers:
+        normalized_marker = _normalize_for_match(marker)
+        marker_index = normalized.find(normalized_marker)
+        if marker_index >= 0:
+            start_matches.append((marker_index, normalized_marker))
+
+    if not start_matches:
+        return ""
+
+    start_index, start_marker = min(start_matches, key=lambda item: item[0])
+    content_start_index = min(start_index + len(start_marker), len(offsets) - 1)
+    content_start = offsets[content_start_index]
+
+    content_end_index = len(normalized)
+    for marker in end_markers:
+        normalized_marker = _normalize_for_match(marker)
+        marker_index = normalized.find(normalized_marker, content_start_index)
+        if marker_index >= 0:
+            content_end_index = min(content_end_index, marker_index)
+
+    content_end = offsets[content_end_index] if content_end_index < len(offsets) else len(text)
+    return text[content_start:content_end].strip()
+
+
+def _is_design_principles_question(question: str) -> bool:
+    normalized = _normalize_for_match(question)
+    return "tasarim" in normalized and any(marker in normalized for marker in ("ilke", "ilkeleri"))
+
+
+def _design_principles_target(question: str) -> str:
+    if not _is_design_principles_question(question):
+        return ""
+
+    normalized = _normalize_for_match(question)
+    if "gomulu" in normalized or ("yazilim" in normalized and "elektronik" not in normalized and "elekronik" not in normalized):
+        return "embedded_software"
+    if "elektronik" in normalized or "elekronik" in normalized:
+        return "electronic"
+    return ""
+
+
+def _design_principles_config(target: str) -> Optional[Dict[str, Any]]:
+    configs: Dict[str, Dict[str, Any]] = {
+        "electronic": {
+            "start": ("elektronik tasarim ilkeleri", "elekronik tasarim ilkeleri"),
+            "end": (
+                "gomulu yazilim tasarim ilkeleri",
+                "elektronik tasarim standartlari",
+                "elekronik tasarim standartlari",
+            ),
+            "labels": (
+                "modulerlik",
+                "dokumantasyon",
+                "tasarim dogrulama ve test",
+                "guc yonetimi",
+                "emi emc uyumlulugu",
+                "termal yonetim",
+                "isi yonetimi",
+                "yapilabilirlik ve uretilebilirlik",
+            ),
+            "limit": 8,
+        },
+        "embedded_software": {
+            "start": ("gomulu yazilim tasarim ilkeleri",),
+            "end": (
+                "elektronik tasarim standartlari",
+                "elekronik tasarim standartlari",
+                "gomulu yazilim standartlari",
+                "4 sorumlular",
+                "5 dagitim",
+            ),
+            "labels": (
+                "verimlilik",
+                "tasinabilirlik",
+                "gercek zamanli isletim",
+                "hata yonetimi ve guvenlik",
+                "yazilim guncellemeleri",
+                "modulerlik ve yeniden kullanilabilirlik",
+                "dokumantasyon",
+                "test ve dogrulama",
+            ),
+            "limit": 8,
+        },
+    }
+    return configs.get(target)
+
+
+def _extract_labeled_design_segments(
+    block: str,
+    labels: tuple[str, ...],
+    title: str,
+    doc_id: str,
+    limit: int,
+) -> List[Dict[str, str]]:
+    clean_block = _strip_inline_pdf_metadata(block)
+    normalized, offsets = _normalize_for_match_with_offsets(clean_block)
+    if not normalized or not offsets:
+        return []
+
+    label_positions: List[tuple[int, str]] = []
+    search_from = 0
+    for label in labels:
+        position = normalized.find(label, search_from)
+        if position < 0:
+            position = normalized.find(label)
+        if position < 0:
+            continue
+        label_positions.append((position, label))
+        search_from = position + len(label)
+
+    label_positions.sort(key=lambda item: item[0])
+    selected: List[Dict[str, str]] = []
+    seen: set[str] = set()
+
+    for index, (position, label) in enumerate(label_positions):
+        label_start = offsets[position]
+        label_end_index = min(position + len(label) - 1, len(offsets) - 1)
+        label_end = offsets[label_end_index] + 1
+        segment_end = offsets[label_positions[index + 1][0]] if index + 1 < len(label_positions) else len(clean_block)
+
+        label_text = re.sub(r"\s+", " ", clean_block[label_start:label_end]).strip(" :-")
+        body = re.sub(r"\s+", " ", clean_block[label_end:segment_end]).strip(" :-")
+        if len(body) < 12:
+            continue
+
+        segment = f"{label_text}: {body}" if label_text else body
+        if len(segment) > 700:
+            segment = segment[:697].rstrip() + "..."
+
+        key = _normalize_for_match(segment)[:180]
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append({"segment": segment, "title": title, "doc_id": doc_id})
+        if len(selected) >= limit:
+            break
+
+    return selected
+
+
+def _extract_design_principle_segments(question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    target = _design_principles_target(question)
+    config = _design_principles_config(target)
+    if not config:
+        return []
+
+    for doc in docs[:5]:
+        if not _is_kb_document(doc):
+            continue
+
+        source_text = _full_kb_source_text(doc)
+        if not source_text:
+            continue
+
+        block = _extract_normalized_span(source_text, config["start"], config["end"])
+        if not block:
+            continue
+
+        title = _doc_title(doc)
+        doc_id = _doc_document_id(doc) or _doc_identifier(doc)
+        segments = _extract_labeled_design_segments(
+            block=block,
+            labels=config["labels"],
+            title=title,
+            doc_id=doc_id,
+            limit=config["limit"],
+        )
+        if segments:
+            return segments
+
+    return []
 
 
 def _is_desktop_laptop_maintenance_question(question: str) -> bool:
@@ -978,11 +1220,103 @@ def _has_specific_named_value(segment: str) -> bool:
     return bool(re.search(r"\b[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Z0-9][A-Za-z0-9-]+){1,4}\s+\d", segment))
 
 
+def _section_number_and_body(segment: str) -> tuple[str, str]:
+    match = re.match(r"^(?P<number>[1-9](?:\.\d+){1,5})\.?\s*(?P<body>.*)$", str(segment or "").strip())
+    if not match:
+        return "", str(segment or "").strip()
+    return match.group("number"), match.group("body").strip(" :-")
+
+
+def _extract_section_heading_segments(
+    question: str,
+    docs: List[Dict[str, Any]],
+    limit: int = 3,
+) -> List[Dict[str, str]]:
+    """When the question names a section heading, return the content below it."""
+    terms = _query_terms(question)
+    if len(terms) < 2:
+        return []
+
+    normalized_question = _normalize_for_match(question)
+    best_score = -1.0
+    best_segments: List[Dict[str, str]] = []
+
+    for doc_rank, doc in enumerate(docs[:5]):
+        if not _is_kb_document(doc):
+            continue
+
+        title = _doc_title(doc)
+        doc_id = _doc_identifier(doc)
+        source_text = _full_kb_source_text(doc)
+        split_segments = _split_kb_segments(source_text)
+        if not split_segments:
+            continue
+
+        for index, segment in enumerate(split_segments):
+            section_number, body = _section_number_and_body(segment)
+            if not section_number or not body:
+                continue
+
+            clean_heading = _clean_kb_answer_segment(segment)
+            normalized_heading = _normalize_for_match(clean_heading)
+            heading_terms = _query_terms(clean_heading)
+            if not heading_terms:
+                continue
+            if len(clean_heading) > 120:
+                continue
+
+            overlap = terms & heading_terms
+            if len(overlap) < min(2, len(heading_terms)):
+                continue
+            if not any(term in normalized_heading for term in ("gecis", "ortam", "canli", "disaster", "failover")):
+                continue
+
+            selected: List[Dict[str, str]] = []
+            child_prefix = f"{section_number}."
+            for child_segment in split_segments[index + 1:]:
+                child_number, _ = _section_number_and_body(child_segment)
+                if child_number and not child_number.startswith(child_prefix):
+                    break
+                if child_number and child_number == section_number:
+                    continue
+
+                cleaned_child = _clean_kb_answer_segment(child_segment)
+                if not cleaned_child:
+                    continue
+                if child_number and child_number.startswith(child_prefix):
+                    selected.append(
+                        {
+                            "segment": f"{clean_heading}: {cleaned_child}",
+                            "title": title,
+                            "doc_id": doc_id,
+                        }
+                    )
+                if len(selected) >= limit:
+                    break
+
+            if selected:
+                score = float(len(overlap))
+                if normalized_heading and normalized_heading in normalized_question:
+                    score += 10.0
+                if any(term in overlap for term in ("disasterdan", "canlidan")):
+                    score += 1.0
+                score -= doc_rank * 0.1
+                if score > best_score:
+                    best_score = score
+                    best_segments = selected
+
+    return best_segments
+
+
 def _extract_relevant_kb_segments(question: str, docs: List[Dict[str, Any]], limit: int = 3) -> List[Dict[str, str]]:
     terms = _query_terms(question)
     terminal_question = any(term.startswith("terminal") for term in terms)
     adisyon_question = "adisyon" in terms
     mobile_printer_question = "mobil" in terms and any(term.startswith("yazici") for term in terms)
+
+    design_principle_segments = _extract_design_principle_segments(question, docs)
+    if design_principle_segments:
+        return design_principle_segments
 
     if _is_desktop_laptop_maintenance_question(question):
         maintenance_segments = _extract_desktop_laptop_maintenance_segments(docs)
@@ -1008,6 +1342,10 @@ def _extract_relevant_kb_segments(question: str, docs: List[Dict[str, Any]], lim
                 action_plan_segments = _extract_action_plan_segments(doc)
                 if action_plan_segments:
                     return action_plan_segments
+
+    section_heading_segments = _extract_section_heading_segments(question, docs, limit=limit)
+    if section_heading_segments:
+        return section_heading_segments
 
     candidates: List[Dict[str, Any]] = []
 
@@ -1186,7 +1524,22 @@ def _docs_for_direct_segments(docs: List[Dict[str, Any]], segments: List[Dict[st
         id_matches = bool(doc_ids & segment_id_families)
         title_matches = title in segment_titles if title else False
         if id_matches or title_matches:
-            filtered.append(doc)
+            matched_segment_texts: List[str] = []
+            for item in segments:
+                item_ids = id_family(str(item.get("doc_id", "") or "").strip())
+                item_title = _normalize_for_match(str(item.get("title", "") or ""))
+                if bool(doc_ids & item_ids) or (title and item_title == title):
+                    segment_text = str(item.get("segment", "") or "").strip()
+                    if segment_text:
+                        matched_segment_texts.append(segment_text)
+
+            aligned_doc = doc.copy()
+            if matched_segment_texts:
+                aligned_text = " ".join(matched_segment_texts)
+                aligned_doc["text"] = aligned_text
+                aligned_doc["content"] = aligned_text
+                aligned_doc["description"] = aligned_text
+            filtered.append(aligned_doc)
 
     return filtered or docs
 
@@ -1224,6 +1577,99 @@ def _infer_support_scenario(question: str, docs: List[Dict[str, Any]]) -> str:
     if any(term in text for term in ("teams", "mikrofon", "kamera", "toplantı", "ses")):
         return "teams"
     return "generic"
+
+
+def _support_scenario_from_text(text: str) -> str:
+    normalized_text = _normalize_for_scenario_match(text)
+
+    if any(term in normalized_text for term in ("vpn", "forticlient", "remote access", "uzaktan erisim")):
+        return "vpn"
+    if any(term in normalized_text for term in ("disk alani", "disk dol", "depolama", "bos alan", "storage")):
+        return "storage"
+    if any(term in normalized_text for term in ("laptop", "dizustu", "masaustu", "yavas", "performans", "bellek", "ram")):
+        return "performance"
+    if any(term in normalized_text for term in ("mail", "email", "e posta", "outlook", "exchange", "posta kutusu", "kota")):
+        return "mail"
+    if any(term in normalized_text for term in ("mfa", "authenticator", "token", "sifre", "parola", "sso", "hesap kilit", "login", "giris")):
+        return "identity"
+    if any(term in normalized_text for term in ("yazici", "printer", "cikti", "toner", "tarama", "spooler")):
+        return "printer"
+    if any(term in normalized_text for term in ("teams", "mikrofon", "kamera", "toplanti", "ses")):
+        return "teams"
+    return "generic"
+
+
+def _infer_support_scenario(question: str, docs: List[Dict[str, Any]]) -> str:
+    question_scenario = _support_scenario_from_text(question)
+    if question_scenario != "generic":
+        return question_scenario
+    return _support_scenario_from_text(_combined_doc_text("", docs))
+
+
+def _doc_matches_support_scenario(doc: Dict[str, Any], scenario: str) -> bool:
+    if scenario == "generic":
+        return True
+    return _support_scenario_from_text(_combined_doc_text("", [doc])) == scenario
+
+
+def _filter_advisory_docs_for_question(question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep advisory answers tied to sources that match the user's support scenario."""
+    scenario = _infer_support_scenario(question, [])
+    if scenario == "generic":
+        return docs
+    return [doc for doc in docs if _doc_matches_support_scenario(doc, scenario)]
+
+
+def _build_support_playbook_doc(question: str, scenario: str, language: str) -> Dict[str, Any]:
+    """Create a clearly labeled fallback source when retrieval has no scenario match."""
+    if scenario == "generic":
+        return {}
+
+    if language == "tr":
+        title_by_scenario = {
+            "vpn": "VPN genel BT kontrol listesi",
+            "storage": "Disk alanı genel BT kontrol listesi",
+            "performance": "Performans genel BT kontrol listesi",
+            "mail": "E-posta genel BT kontrol listesi",
+            "identity": "Kimlik ve parola genel BT kontrol listesi",
+            "printer": "Yazıcı genel BT kontrol listesi",
+            "teams": "Teams genel BT kontrol listesi",
+        }
+        title = title_by_scenario.get(scenario, "Genel BT kontrol listesi")
+        steps = _action_steps_tr(question, [])
+        note = (
+            "İndekste bu senaryoya özel güvenilir kayıt bulunamadı. "
+            "Aşağıdaki maddeler genel BT destek kontrol listesinden üretilmiştir."
+        )
+    else:
+        title_by_scenario = {
+            "vpn": "VPN general IT checklist",
+            "storage": "Storage general IT checklist",
+            "performance": "Performance general IT checklist",
+            "mail": "Email general IT checklist",
+            "identity": "Identity and password general IT checklist",
+            "printer": "Printer general IT checklist",
+            "teams": "Teams general IT checklist",
+        }
+        title = title_by_scenario.get(scenario, "General IT checklist")
+        steps = _action_steps_en(question, [])
+        note = (
+            "No reliable indexed source matched this support scenario. "
+            "The items below come from the general IT support checklist."
+        )
+
+    content = f"{note}\n" + "\n".join(f"{index}. {step}" for index, step in enumerate(steps, 1))
+    return {
+        "doc_id": f"playbook_{scenario}",
+        "id": f"playbook_{scenario}",
+        "doc_type": "playbook",
+        "title": title,
+        "short_description": title,
+        "resolution": content,
+        "text": content,
+        "description": content,
+        "score": 0.55,
+    }
 
 
 def _action_steps_tr(question: str, docs: List[Dict[str, Any]]) -> List[str]:
@@ -1361,6 +1807,22 @@ def _is_follow_up_question(question: str) -> bool:
         "platform",
         "yapay zeka",
     )
+    explicit_document_lookup_markers = (
+        "belge",
+        "dokuman",
+        "elektronik",
+        "elekronik",
+        "gomulu",
+        "ilke",
+        "ilkeleri",
+        "platform",
+        "prosedur",
+        "talimat",
+        "tasarim",
+        "yapay zeka",
+        "yazilim",
+        "yonerge",
+    )
     clear_correction_markers = (
         "az once",
         "ben sadece",
@@ -1422,7 +1884,10 @@ def _is_follow_up_question(question: str) -> bool:
     )
 
     has_explicit_kb_target = len(words) > 5 and any(marker in ascii_normalized for marker in explicit_kb_markers)
+    has_explicit_document_lookup = len(words) > 5 and any(marker in ascii_normalized for marker in explicit_document_lookup_markers)
     has_clear_correction = any(marker in ascii_normalized for marker in clear_correction_markers)
+    if has_explicit_document_lookup:
+        return False
     if has_explicit_kb_target and not has_clear_correction:
         return False
 
@@ -1475,41 +1940,57 @@ def _build_advisory_answer_tr(question: str, docs: List[Dict[str, Any]]) -> str:
     Returns:
         Advisory answer in Turkish with detailed step-by-step instructions
     """
-    answer_parts = [
-        f"Sorunuz: {question}\n",
-        "\n**Sizin deneyebileceğiniz adımlar:**\n"
-    ]
+    is_playbook_fallback = bool(docs) and all(
+        str(doc.get("doc_type", "") or "").casefold() == "playbook"
+        for doc in docs
+    )
+
+    answer_parts = [f"Sorunuz: {question}\n"]
+    if is_playbook_fallback:
+        answer_parts.append(
+            "\n**Kaynak eşleşmesi:**\n"
+            "- İndekste bu senaryoya özel güvenilir kayıt bulunamadı; aşağıdaki yanıt genel BT kontrol listesidir.\n"
+        )
+
+    answer_parts.append("\n**Sizin deneyebileceğiniz adımlar:**\n")
 
     for index, step in enumerate(_action_steps_tr(question, docs), 1):
         answer_parts.append(f"{index}. {step}\n")
 
-    answer_parts.append("\n**Geçmiş benzer kayıtlarda incelenenler:**\n")
+    if is_playbook_fallback:
+        answer_parts.append("\n**Yanıtın dayanağı:**\n")
+    else:
+        answer_parts.append("\n**Geçmiş benzer kayıtlarda incelenenler:**\n")
     
-    # Show top 3 usable examples. Ticket documents use resolution; KB chunks use text/content.
     examples_rendered = 0
-    for doc in docs:
-        if examples_rendered >= 3:
-            break
+    if is_playbook_fallback:
+        answer_parts.append("- Genel BT kontrol listesi: playbook\n")
+        examples_rendered = len(docs)
+    else:
+        # Show top 3 usable examples. Ticket documents use resolution; KB chunks use text/content.
+        for doc in docs:
+            if examples_rendered >= 3:
+                break
 
-        ticket_id = _doc_identifier(doc)
-        doc_type = doc.get("doc_type", "itsm_ticket")
-        short_desc = _doc_title(doc)
-        resolution = _doc_solution_text(doc)
-        
-        if short_desc and resolution:
-            examples_rendered += 1
-            source_label = _source_label_tr(doc_type)
-            answer_parts.append(f"\n**Örnek {examples_rendered} - {source_label}: {ticket_id}**\n")
-            answer_parts.append(f"- **Durum:** {short_desc}\n")
-            
-            formatted_resolution = _format_resolution_text(resolution, doc_type)
-            answer_parts.append(f"- **Uygulanan Çözüm:**\n{formatted_resolution}\n")
+            ticket_id = _doc_identifier(doc)
+            doc_type = doc.get("doc_type", "itsm_ticket")
+            short_desc = _doc_title(doc)
+            resolution = _doc_solution_text(doc)
+
+            if short_desc and resolution:
+                examples_rendered += 1
+                source_label = _source_label_tr(doc_type)
+                answer_parts.append(f"\n**Örnek {examples_rendered} - {source_label}: {ticket_id}**\n")
+                answer_parts.append(f"- **Durum:** {short_desc}\n")
+
+                formatted_resolution = _format_resolution_text(resolution, doc_type)
+                answer_parts.append(f"- **Uygulanan Çözüm:**\n{formatted_resolution}\n")
     
     answer_parts.append("\n**Ne zaman BT ekibine iletilmeli?**\n")
     answer_parts.append("- Yukarıdaki kontrollerden sonra sorun sürüyorsa hata kodu, saat, ekran görüntüsü ve etkilenen kullanıcı bilgisini ekleyin.\n")
     answer_parts.append("- Benzer geçmiş adımları referans göstererek BT destek ekibinden kontrol veya uygulama talep edebilirsiniz.\n")
     
-    if len(docs) > examples_rendered:
+    if not is_playbook_fallback and len(docs) > examples_rendered:
         answer_parts.append(
             f"\n\n(Toplam {len(docs)} benzer durum bulundu)"
         )
@@ -1587,41 +2068,57 @@ def _build_advisory_answer_en(question: str, docs: List[Dict[str, Any]]) -> str:
     Returns:
         Advisory answer in English with detailed step-by-step instructions
     """
-    answer_parts = [
-        f"Your question: {question}\n",
-        "\n**Steps you can try first:**\n"
-    ]
+    is_playbook_fallback = bool(docs) and all(
+        str(doc.get("doc_type", "") or "").casefold() == "playbook"
+        for doc in docs
+    )
+
+    answer_parts = [f"Your question: {question}\n"]
+    if is_playbook_fallback:
+        answer_parts.append(
+            "\n**Source match:**\n"
+            "- No reliable indexed record matched this scenario; the answer below uses the general IT checklist.\n"
+        )
+
+    answer_parts.append("\n**Steps you can try first:**\n")
 
     for index, step in enumerate(_action_steps_en(question, docs), 1):
         answer_parts.append(f"{index}. {step}\n")
 
-    answer_parts.append("\n**What was checked in similar past tickets:**\n")
+    if is_playbook_fallback:
+        answer_parts.append("\n**Answer basis:**\n")
+    else:
+        answer_parts.append("\n**What was checked in similar past tickets:**\n")
     
-    # Show top 3 usable examples. Ticket documents use resolution; KB chunks use text/content.
     examples_rendered = 0
-    for doc in docs:
-        if examples_rendered >= 3:
-            break
+    if is_playbook_fallback:
+        answer_parts.append("- General IT checklist: playbook\n")
+        examples_rendered = len(docs)
+    else:
+        # Show top 3 usable examples. Ticket documents use resolution; KB chunks use text/content.
+        for doc in docs:
+            if examples_rendered >= 3:
+                break
 
-        ticket_id = _doc_identifier(doc)
-        doc_type = doc.get("doc_type", "itsm_ticket")
-        short_desc = _doc_title(doc)
-        resolution = _doc_solution_text(doc)
-        
-        if short_desc and resolution:
-            examples_rendered += 1
-            source_label = _source_label_en(doc_type)
-            answer_parts.append(f"\n**Example {examples_rendered} - {source_label}: {ticket_id}**\n")
-            answer_parts.append(f"- **Issue:** {short_desc}\n")
-            
-            formatted_resolution = _format_resolution_text(resolution, doc_type)
-            answer_parts.append(f"- **Resolution Applied:**\n{formatted_resolution}\n")
+            ticket_id = _doc_identifier(doc)
+            doc_type = doc.get("doc_type", "itsm_ticket")
+            short_desc = _doc_title(doc)
+            resolution = _doc_solution_text(doc)
+
+            if short_desc and resolution:
+                examples_rendered += 1
+                source_label = _source_label_en(doc_type)
+                answer_parts.append(f"\n**Example {examples_rendered} - {source_label}: {ticket_id}**\n")
+                answer_parts.append(f"- **Issue:** {short_desc}\n")
+
+                formatted_resolution = _format_resolution_text(resolution, doc_type)
+                answer_parts.append(f"- **Resolution Applied:**\n{formatted_resolution}\n")
     
     answer_parts.append("\n**When to escalate to IT:**\n")
     answer_parts.append("- If the issue continues after these checks, include the error code, time, screenshot, and affected user details.\n")
     answer_parts.append("- You can reference similar past steps when asking IT support to verify or apply the fix.\n")
     
-    if len(docs) > examples_rendered:
+    if not is_playbook_fallback and len(docs) > examples_rendered:
         answer_parts.append(
             f"\n\n({len(docs)} similar cases found in total)"
         )
@@ -1906,6 +2403,7 @@ class RAGPipeline:
         # Step 4: Generate answer using direct KB evidence, real LLM, or stub (PHASE 8)
         answer_docs = retrieved_docs
         used_direct_kb_answer = False
+        used_playbook_fallback = False
         try:
             source_grounded_kb_required = _requires_source_grounded_kb_answer(contextual_question)
             direct_kb_docs = _direct_kb_docs_for_question(contextual_question, retrieved_docs)
@@ -1930,23 +2428,47 @@ class RAGPipeline:
                     generated_answer = _build_direct_kb_answer_tr(contextual_question, direct_kb_docs)
                 else:
                     generated_answer = _build_direct_kb_answer_en(contextual_question, direct_kb_docs)
-            elif self.use_real_llm and self.openai_api_key:
-                generated_answer = generate_answer_with_llm(
-                    question=contextual_question,
-                    docs=retrieved_docs,
-                    language=language,
-                    conversation_history=conversation_history or [],  # PHASE 9
-                    api_key=self.openai_api_key,
-                    model=self.llm_model_name,
-                    temperature=self.llm_temperature,
-                    max_tokens=self.llm_max_tokens
-                )
             else:
-                generated_answer = generate_answer_with_stub(
-                    question=contextual_question,
-                    docs=retrieved_docs,
-                    language=language
-                )
+                support_scenario = _infer_support_scenario(contextual_question, [])
+                answer_docs = _filter_advisory_docs_for_question(contextual_question, retrieved_docs)
+                debug_info["support_scenario"] = support_scenario
+                debug_info["answer_source_count"] = len(answer_docs)
+
+                if support_scenario != "generic" and not answer_docs:
+                    logger.info("answer_rejected_no_scenario_matched_sources",
+                                question=contextual_question[:100],
+                                support_scenario=support_scenario)
+                    playbook_doc = _build_support_playbook_doc(contextual_question, support_scenario, language)
+                    if not playbook_doc:
+                        return self._build_no_answer_result(
+                            language=language,
+                            reason="no_scenario_matched_sources",
+                            retrieved_docs=retrieved_docs,
+                            confidence=0.0,
+                            debug_info=debug_info
+                        )
+                    answer_docs = [playbook_doc]
+                    used_playbook_fallback = True
+                    debug_info["answer_source_count"] = len(answer_docs)
+                    debug_info["used_playbook_fallback"] = True
+
+                if self.use_real_llm and self.openai_api_key:
+                    generated_answer = generate_answer_with_llm(
+                        question=contextual_question,
+                        docs=answer_docs,
+                        language=language,
+                        conversation_history=conversation_history or [],  # PHASE 9
+                        api_key=self.openai_api_key,
+                        model=self.llm_model_name,
+                        temperature=self.llm_temperature,
+                        max_tokens=self.llm_max_tokens
+                    )
+                else:
+                    generated_answer = generate_answer_with_stub(
+                        question=contextual_question,
+                        docs=answer_docs,
+                        language=language
+                    )
         except Exception as e:
             logger.error("answer_generation_failed", error=str(e))
             return self._build_no_answer_result(
@@ -1971,6 +2493,10 @@ class RAGPipeline:
             # Direct KB answers copy source sentences verbatim, so a lower retrieval
             # score can still be acceptable when there is explicit evidence.
             effective_threshold = min(effective_threshold, 0.45)
+        if used_playbook_fallback:
+            # Playbook fallback is useful guidance, but not retrieved evidence.
+            effective_threshold = min(effective_threshold, 0.45)
+            confidence = min(confidence, 0.62)
         if conversation_history:
             # Check if conversation has IT context (already checked earlier)
             has_it_context = False
@@ -2015,7 +2541,7 @@ class RAGPipeline:
             has_answer=True,
             language=language,
             intent=None,  # Can be populated by NLP module if needed
-            retrieved_docs=answer_docs if used_direct_kb_answer else retrieved_docs,
+            retrieved_docs=answer_docs if (used_direct_kb_answer or used_playbook_fallback) else retrieved_docs,
             debug_info=debug_info  # Include debug info
         )
         
@@ -2123,7 +2649,7 @@ class RAGPipeline:
                 "doc_id": doc_id,
                 "doc_type": doc.get("doc_type", "ticket"),
                 "title": title,
-                "snippet": doc.get("description", doc.get("text", ""))[:200],
+                "snippet": doc.get("description", doc.get("text", ""))[:360],
                 "relevance_score": min(1.0, max(0.0, float(doc.get("score", 0.0))))
             }
             sources.append(source)

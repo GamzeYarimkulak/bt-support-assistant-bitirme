@@ -34,12 +34,12 @@ MAX_MEMORY_MESSAGES = 10  # Last 5 user + 5 assistant messages (5 pairs)
 class ChatMessage(BaseModel):
     """Conversation message supplied by the browser for context recovery."""
     role: str = Field(..., description="Message role: user or assistant")
-    content: str = Field(..., min_length=1, max_length=4000, description="Message content")
+    content: str = Field(..., min_length=1, max_length=8000, description="Message content")
 
 
 class ChatRequest(BaseModel):
     """User chat request model."""
-    query: str = Field(..., min_length=1, max_length=1000, description="User question")
+    query: str = Field(..., min_length=1, max_length=4000, description="User question")
     session_id: Optional[str] = Field(None, description="Optional session ID for context")
     language: Optional[str] = Field(None, description="Query language (auto-detected if not provided)")
     messages: Optional[List[ChatMessage]] = Field(
@@ -64,6 +64,9 @@ class RetrievalDebugInfo(BaseModel):
     embedding_results_count: Optional[int] = None
     hybrid_results_count: Optional[int] = None
     query_type: Optional[str] = None  # "short", "medium", "long", "technical"
+    support_scenario: Optional[str] = None
+    answer_source_count: Optional[int] = None
+    used_playbook_fallback: Optional[bool] = None
 
 
 class ChatResponse(BaseModel):
@@ -401,7 +404,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 bm25_results_count=rag_result.debug_info.get("bm25_results_count"),
                 embedding_results_count=rag_result.debug_info.get("embedding_results_count"),
                 hybrid_results_count=rag_result.debug_info.get("hybrid_results_count"),
-                query_type=rag_result.debug_info.get("query_type")
+                query_type=rag_result.debug_info.get("query_type"),
+                support_scenario=rag_result.debug_info.get("support_scenario"),
+                answer_source_count=rag_result.debug_info.get("answer_source_count"),
+                used_playbook_fallback=rag_result.debug_info.get("used_playbook_fallback")
             )
         
         # Build response

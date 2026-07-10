@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BT Destek Operasyon Paneli</title>
-    <link rel="stylesheet" href="/ui/styles.css?v=20260708-format">
+    <link rel="stylesheet" href="/ui/styles.css?v=20260710-history">
 </head>
 <body>
     <div class="app-shell">
@@ -33,6 +33,16 @@
                     <h2>Destek Asistanı</h2>
                 </div>
 
+                <div class="chat-workspace">
+                    <aside class="conversation-sidebar" aria-label="Sohbet gecmisi">
+                        <div class="conversation-sidebar-header">
+                            <h3>Sohbetler</h3>
+                            <button id="new-chat-btn" class="btn btn-secondary btn-new-chat">Yeni</button>
+                        </div>
+                        <div id="conversation-list" class="conversation-list"></div>
+                    </aside>
+
+                    <div class="chat-main">
                 <div id="chat-history-container" class="chat-history-container">
                     <div id="chat-messages" class="chat-messages"></div>
                 </div>
@@ -59,6 +69,8 @@
 
                     <div id="chat-loading" class="chat-loading hidden">
                         <span class="loading-dots">Yanıt hazırlanıyor</span>
+                    </div>
+                </div>
                     </div>
                 </div>
             </section>
@@ -132,6 +144,6 @@
         </footer>
     </div>
 
-    <script src="/ui/app.js?v=20260708-format"></script>
+    <script src="/ui/app.js?v=20260710-history"></script>
 </body>
 </html>

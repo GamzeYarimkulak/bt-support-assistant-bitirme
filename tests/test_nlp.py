@@ -87,6 +87,16 @@ class TestIntentClassifier:
 class TestITRelevanceChecker:
     """Tests for IT relevance filtering."""
 
+    def test_corporate_kb_design_query_is_accepted(self):
+        checker = ITRelevanceChecker()
+
+        query = "ozdilekte elektronik tasarim ilkelerinden bahseder misin"
+        is_it, confidence = checker.is_it_related(query)
+
+        assert is_it is True
+        assert confidence >= 0.8
+        assert checker.should_reject_query(query) is False
+
     def test_weather_query_is_rejected(self):
         checker = ITRelevanceChecker()
 
