@@ -104,6 +104,27 @@ def _normalize_keyword_text(text: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+VPN_SUFFIX_PATTERN = re.compile(
+    r"\bvpn(?:e|ye|de|den|nin|in|i|im|imiz|ler|lerde|lerden)?\b",
+    re.IGNORECASE,
+)
+
+
+def _compile_keyword_patterns(keywords):
+    patterns = []
+    for keyword in keywords:
+        normalized_keyword = _normalize_keyword_text(keyword)
+        if normalized_keyword:
+            patterns.append(
+                re.compile(r"\b" + re.escape(normalized_keyword) + r"\b", re.IGNORECASE)
+            )
+    return patterns
+
+
+def _looks_like_vpn_query(normalized_query: str) -> bool:
+    return bool(VPN_SUFFIX_PATTERN.search(normalized_query))
+
+
 def _looks_like_corporate_kb_query(query: str) -> bool:
     normalized = _normalize_keyword_text(query)
     has_entity = any(marker in normalized for marker in CORPORATE_KB_ENTITY_MARKERS)
@@ -122,10 +143,8 @@ class ITRelevanceChecker:
         # Use word boundaries to avoid partial matches (e.g., "açılmıyor" shouldn't match "açamıyorum")
         # For Turkish words with suffixes, word boundaries still work (e.g., "şişe" matches "şişenin")
         # But we need to be careful: "açılmıyor" should NOT match "açamıyorum"
-        self.it_patterns = [re.compile(r'\b' + re.escape(kw.lower()) + r'\b', re.IGNORECASE) 
-                           for kw in IT_KEYWORDS]
-        self.non_it_patterns = [re.compile(r'\b' + re.escape(kw.lower()) + r'\b', re.IGNORECASE) 
-                               for kw in NON_IT_KEYWORDS]
+        self.it_patterns = _compile_keyword_patterns(IT_KEYWORDS)
+        self.non_it_patterns = _compile_keyword_patterns(NON_IT_KEYWORDS)
         
         logger.info("it_relevance_checker_initialized",
                    it_keywords_count=len(IT_KEYWORDS),
@@ -146,6 +165,7 @@ class ITRelevanceChecker:
             return False, 0.0
         
         query_lower = query.lower().strip()
+        normalized_query = _normalize_keyword_text(query)
         
         # Check for thank you messages or acknowledgments (don't reject these)
         thank_you_patterns = [
@@ -171,7 +191,9 @@ class ITRelevanceChecker:
             return True, 0.85
 
         # Count IT keyword matches FIRST
-        it_matches = sum(1 for pattern in self.it_patterns if pattern.search(query_lower))
+        it_matches = sum(1 for pattern in self.it_patterns if pattern.search(normalized_query))
+        if it_matches == 0 and _looks_like_vpn_query(normalized_query):
+            it_matches = 1
         
         # If IT keywords found, query is IT-related (even if non-IT keywords also present)
         if it_matches > 0:
@@ -182,7 +204,7 @@ class ITRelevanceChecker:
         
         # Only check non-IT keywords if NO IT keywords found
         for pattern in self.non_it_patterns:
-            if pattern.search(query_lower):
+            if pattern.search(normalized_query):
                 logger.debug("non_it_query_detected", query=query[:50])
                 return False, 0.9  # High confidence it's not IT-related
         

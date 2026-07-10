@@ -97,6 +97,22 @@ class TestITRelevanceChecker:
         assert confidence >= 0.8
         assert checker.should_reject_query(query) is False
 
+    def test_vpn_query_with_turkish_suffix_is_accepted(self):
+        checker = ITRelevanceChecker()
+
+        queries = [
+            "vpne bağlanamıyorum ne yapmam gerek",
+            "VPN'e bağlanamıyorum",
+            "vpn bağlantı sorunu yaşıyorum",
+        ]
+
+        for query in queries:
+            is_it, confidence = checker.is_it_related(query)
+
+            assert is_it is True
+            assert confidence >= 0.6
+            assert checker.should_reject_query(query) is False
+
     def test_weather_query_is_rejected(self):
         checker = ITRelevanceChecker()
 
