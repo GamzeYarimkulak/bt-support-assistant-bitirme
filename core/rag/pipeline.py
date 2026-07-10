@@ -600,6 +600,51 @@ def _normalize_for_match(text: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+def _squash_elongated_letters(text: str) -> str:
+    return re.sub(r"([a-z])\1{2,}", r"\1", text)
+
+
+_ACKNOWLEDGMENT_COMPACT_MESSAGES = {
+    "anladim",
+    "cokiyi",
+    "elinesaglik",
+    "eyvallah",
+    "harika",
+    "harikasin",
+    "mukemmel",
+    "mukemmelsin",
+    "ok",
+    "okay",
+    "sagol",
+    "super",
+    "supersin",
+    "tamam",
+    "tamamdir",
+    "tesekkur",
+    "tesekkurler",
+    "thanks",
+}
+
+_ACKNOWLEDGMENT_PATTERNS = (
+    re.compile(r"^(cok )?(tesekkur|tesekkurler)( ederim| ediyorum| ederiz)?$"),
+    re.compile(r"^(cok )?(sag ol|sagol|eyvallah)$"),
+    re.compile(r"^(tamam|ok|okay|anladim|tamamdir)( tesekkur| thanks)?( ederim| ediyorum)?$"),
+    re.compile(r"^(super|supersin|harika|harikasin|mukemmel|mukemmelsin|cok iyi|eline saglik)$"),
+)
+
+
+def _is_acknowledgment_message(message: str) -> bool:
+    normalized = _squash_elongated_letters(_normalize_for_match(message))
+    if not normalized:
+        return False
+
+    compact = normalized.replace(" ", "")
+    if compact in _ACKNOWLEDGMENT_COMPACT_MESSAGES:
+        return True
+
+    return any(pattern.match(normalized) for pattern in _ACKNOWLEDGMENT_PATTERNS)
+
+
 def _normalize_for_match_with_offsets(text: str) -> tuple[str, List[int]]:
     """Normalize text like _normalize_for_match while keeping original offsets."""
     normalized_chars: List[str] = []
@@ -1794,6 +1839,9 @@ def _previous_user_issue(conversation_history: Optional[List[Dict[str, Any]]]) -
 
 
 def _is_follow_up_question(question: str) -> bool:
+    if _is_acknowledgment_message(question):
+        return False
+
     normalized = question.casefold()
     ascii_normalized = _normalize_for_match(question)
     words = normalized.split()
@@ -2251,30 +2299,23 @@ class RAGPipeline:
             language = self._detect_language(question)
         
         # Step 0.5: Handle thank you messages and acknowledgments
-        question_lower = question.lower().strip()
-        thank_you_patterns = [
-            r'^(teşekkür|thanks|thank you)(\s+ederim|\s+ediyorum|\s+ediyoruz)?\.?$',
-            r'^(tamam|ok|okay|anladım|tamamdır)(\s+teşekkür|\s+thanks)?(\s+ederim|\s+ediyorum)?\.?$',
-            r'^(tamam|ok|okay|anladım|tamamdır)\.?$',
-        ]
-        for pattern in thank_you_patterns:
-            if re.match(pattern, question_lower):
-                # Thank you messages - return friendly acknowledgment
-                if language == "tr":
-                    answer = "Rica ederim! Başka bir konuda yardımcı olabilir miyim?"
-                else:
-                    answer = "You're welcome! Is there anything else I can help you with?"
-                
-                return RAGResult(
-                    answer=answer,
-                    confidence=0.0,
-                    sources=[],
-                    has_answer=False,
-                    language=language,
-                    intent="acknowledgment",
-                    retrieved_docs=[],
-                    debug_info={"rejection_reason": "thank_you_message"}
-                )
+        if _is_acknowledgment_message(question):
+            # Thank you / positive feedback messages - return friendly acknowledgment
+            if language == "tr":
+                answer = "Rica ederim! Başka bir konuda yardımcı olabilir miyim?"
+            else:
+                answer = "You're welcome! Is there anything else I can help you with?"
+
+            return RAGResult(
+                answer=answer,
+                confidence=0.0,
+                sources=[],
+                has_answer=False,
+                language=language,
+                intent="acknowledgment",
+                retrieved_docs=[],
+                debug_info={"rejection_reason": "acknowledgment_message"}
+            )
         
         # Step 0: Check if query is IT-related (filter non-IT queries)
         # IMPORTANT: Check conversation history - if previous messages were IT-related,

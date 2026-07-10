@@ -338,6 +338,24 @@ class TestLLMStub:
         assert "Takip sorusu/duzeltme" in contextual_query
         assert _requires_source_grounded_kb_answer(contextual_query) is True
 
+    def test_positive_acknowledgment_is_not_folded_into_previous_context(self):
+        """Positive feedback should not rerun the previous document question."""
+        history = [
+            {
+                "role": "user",
+                "content": "özdilekte enerji yönetim aksiyon planında projenin amacı ve hedefi neymiş",
+            },
+            {
+                "role": "assistant",
+                "content": "Kaynakta geçen bilgiye göre proje amacı özetlendi.",
+            },
+        ]
+
+        contextual_query = _build_contextual_retrieval_query("süpersinnn", history)
+
+        assert contextual_query == "süpersinnn"
+        assert "Takip sorusu/duzeltme" not in contextual_query
+
     def test_explicit_ozdilek_document_question_is_not_folded_into_previous_context(self):
         """Explicit document lookups should not be treated as vague follow-ups."""
         history = [
@@ -520,6 +538,26 @@ class TestRAGPipelineNoAnswer:
         assert result.confidence == 0.0
         assert len(result.sources) == 0
         assert "güvenilir bir cevap" in result.answer.lower() or "cannot provide" in result.answer.lower()
+
+    def test_positive_acknowledgment_returns_short_reply(self, empty_pipeline):
+        """Positive feedback should be acknowledged without retrieval."""
+        history = [
+            {
+                "role": "user",
+                "content": "özdilekte enerji yönetim aksiyon planında projenin amacı ve hedefi neymiş",
+            },
+            {
+                "role": "assistant",
+                "content": "Kaynakta geçen bilgiye göre proje amacı özetlendi.",
+            },
+        ]
+
+        result = empty_pipeline.answer("süpersinnn", conversation_history=history)
+
+        assert result.intent == "acknowledgment"
+        assert result.has_answer is False
+        assert result.sources == []
+        assert "Rica ederim" in result.answer
 
 
 class TestRAGPipelineWithAnswer:
